@@ -1,0 +1,1415 @@
+"""
+统一诊断 Agent（FixAgent）
+
+持有全部工具的 ReAct Agent，在单次循环中自主决策工具调用。
+替代原有的 Orchestrator + RetrievalAgent + DiagnosisAgent + GuidanceAgent 四层架构。
+
+【核心能力】
+- 知识检索：从向量知识库检索维修手册相关内容
+- 故障诊断：通过图谱查询分析设备→部件→故障→解决方案链路
+- 维修指引：综合检索和诊断结果生成标准化维修步骤
+
+【执行模式】
+- run_with_react()：非流式，返回 AgentOutput
+- run_with_react_stream()：流式，yield SSE 事件
+
+【调用链】
+api/main.py → FixAgent.run_with_react() → chat_with_tools() → 工具调用循环 → 最终回答
+              → ReviewAgent.run() → 审核 → 返回
+
+【关联】
+- 继承 BaseAgent，使用 run_with_react() 进入 ReAct 循环
+- 工具来源：tools/knowledge_retrieval_tool.py, tools/graph_java_tool.py
+- 下游：ReviewAgent 对输出做最终校验
+"""
+
+import json
+import logging
+import time
+from typing import List, Any, Optional, Dict, Callable
+
+from agents.base_agent import (
+    BaseAgent,
+    AgentInput,
+    AgentOutput,
+    AgentRunContext,
+)
+from services.llm.output_style import USER_VISIBLE_PLAIN_TEXT_RULES
+from services.retrieval.evidence import EvidenceLedger
+from services.retrieval.manual_scope import (
+    apply_authoritative_manual_scope,
+    build_manual_retrieval_kwargs,
+)
+from services.retrieval.response_plan import build_response_plan, finalize_response
+from services.retrieval.evidence_fusion import fuse_evidence_support
+from services.visual_query_context import build_visual_query_context
+
+logger = logging.getLogger(__name__)
+
+
+FIX_AGENT_SYSTEM_PROMPT = """你是一名设备检修 AI 助手，负责知识检索、故障诊断和维修指引。
+
+【最高原则】
+1. 有据可依：技术结论尽量基于工具检索到的手册或图谱证据。
+2. 不编事实：数值、型号、对象、单位、原因和操作步骤都必须受合格证据约束；无合格证据时，不得用通用知识补全常见原因、参数或操作步骤。
+3. 信息不足先检索：缺设备型号或故障现象时，先用已知关键词检索；仍无合格证据则明确缺失项并追问，不凭空硬编。
+4. 图谱中标注"未验证(手册推断)"的方案，引用时说明"依据手册推断，建议现场确认"，不要当成已验证结论。
+5. 始终用中文回答；任何形态的输出都不要出现 image_url、source、doc_id、chunk_id、top_k 等内部标识或工具参数。
+
+【证据覆盖四态】
+- complete：所有问题要点都有合格证据，只使用这些证据完整回答。
+- partial：只回答有合格证据的要点，并明确逐项说明当前资料缺少什么。
+- unsupported：说明当前知识库范围或证据不足；不得输出通用原因、参数、品牌、型号或操作猜测。
+- conflict：并列披露冲突值和各自来源，要求确认设备或文档版本，不自行选边。
+
+【可用工具】（你自行决定调哪些、调几次、什么顺序）
+知识检索 knowledge_retrieval：从维修手册知识库检索内容，查资料、找参数、找方法时用；用户要从知识库或手册里找图片、示意图、结构图时也用它，不需要用户上传图片。即使用户没给型号，也先用通用关键词（如"摩托车 起动电机 安装"）检索一遍，别等信息齐了再查。
+图谱诊断 java_graph_diagnosis_path：只查询真实诊断链（设备→部件→故障→已沉淀解决方案）。用户描述故障现象时用 fault_description；图谱没有 Fault 诊断链时返回空，不能把单纯命中的设备/部件骨架当成故障或维修规程证据。拆装、更换、调整步骤统一通过 knowledge_retrieval 从手册向量库检索，不再从图谱读取手册规程副本。
+部件反查设备 component_reverse_device：当用户只描述部件（如"油泵漏油"）没明确说设备时用。通过部件描述反查所属设备，返回"设备+部件"组合列表。根据返回数量决策：(1)唯一设备→自动锁定该设备，用设备名作为 keyword 继续调用 java_graph_diagnosis_path；(2)多设备→反问用户"你说的是哪个设备的这个部件？"并列出候选；(3)0设备→说明图谱中无该部件记录，请用户补充设备型号或对应手册，不输出通用故障原因或操作建议。
+设备搜索 java_graph_device_search：设备名不确定时，先搜索确认。
+流程推荐 procedure_recommend：需要给出规范检修流程时用。
+历史召回 recall_conversation_detail：用户追问之前提过的细节、当前上下文不够时用。
+诊断类问题需要同时检索手册证据；只有图谱存在真实 Fault→Solution 链时，才把图谱作为额外因果/经验依据。拆装和规程问题只依赖手册检索，不强求图谱命中。
+用户上传图片时，给知识检索和图谱诊断都传入图片，并结合图片内容和文字综合判断。
+
+【四态诊断决策】
+当用户描述故障但未明确设备时，按以下顺序决策：
+1. 先调用 component_reverse_device 用部件描述反查设备
+2. 根据返回的设备数量：
+   - 唯一设备：自动锁定，用该设备名作为 keyword 调用 java_graph_diagnosis_path 继续诊断
+   - 多设备（2个及以上）：向用户反问"你说的是以下哪个设备的这个部件？"并列出所有候选设备（带位置信息），等用户选择后再继续
+   - 0设备：说明"知识图谱中未找到该部件的记录，图谱覆盖范围有限"，并请求补充设备或手册信息，不补写故障原因或操作建议
+3. 不要因为缺少设备信息就停止诊断；要主动通过反查工具或反问获取设备信息后继续
+
+【设备不明时的统一处理 —— 候选只来自图谱】
+用户没说清是哪个设备、或检索片段疑似跨设备时，用"图谱有没有设备"来决定怎么问、怎么答：
+- 图谱查到了设备（component_reverse_device / java_graph_diagnosis_path 返回了设备）：
+  把图谱里的设备名列给用户反问"请问你修的是以下哪个设备：X / Y？"，让用户确认后再精准回答。
+  绝不自己猜是哪个设备，也不要凭分数替用户选。
+- 图谱查不到设备（返回空 / evidence_status=empty）：不要硬凑候选或编造设备名；说明证据范围并请求设备型号或对应手册。
+- 用户被问后仍表示"不知道是什么设备"：说明当前无法形成设备专属可靠结论，不输出通用故障原因或操作步骤。
+
+【证据质量感知 —— 重要】
+工具返回结果里可能带 evidence_status 字段和 evidence_notice 提示，你必须据此调整回答：
+- evidence_status="empty"：没有可靠依据；明确说明知识库/图谱暂无相关依据，不补写部件、故障、参数、原因或步骤。
+- evidence_status="low_confidence"：只能说明召回身份或主题未确认，不借用跨设备方法、参数或专属操作。
+- 只有片段确实是用户所问设备的内容时才可作为直接依据。
+- evidence_status="found"/无此字段：证据可用，正常依据回答。
+核心原则：宁可如实说"没有可靠依据"，也不要用空的或低质量的检索结果去支撑一个看似确定的技术结论。
+
+【来源标注】
+来源只放进结构化字段（诊断态的 knowledgeBasis）；纯文本回答用自然语言说明依据即可，不强行标"[手册]"这类标记。
+
+【输出格式】
+1. 调用工具阶段：需要查资料时就调用工具，这个阶段不受下面格式约束，正常思考和调用即可。
+2. 给最终答案时，才按【当前回答契约】执行：契约要求纯文本时，遵守下面的【纯文本通则】；契约要求 JSON 时，只输出那个 JSON 对象，不要任何额外文字、解释或代码块标记。
+3. 逃生口：如果实际情况和契约对不上——比如本该诊断、却证据不足或信息不全——不要硬凑那个格式，改用自然语言说明情况、或向用户追问缺的关键信息。
+
+【纯文本通则】（契约要求纯文本时适用）
+""" + USER_VISIBLE_PLAIN_TEXT_RULES + "\n"
+
+
+# 4 种回答契约：按意图路由给的 answer_style，每轮只注入其一（见 get_system_prompt_for_run）
+FIX_AGENT_RESPONSE_CONTRACTS = {
+    "conversational": (
+        "〔对话态〕用自然段中文，简明友好。不输出表格、大标题、长清单、安全提醒。"
+        "若是识别类问题（这是什么 / 是不是同一类），只回答识别与所属系统，"
+        "不主动给拆装步骤、维修建议或扭矩、间隙、更换周期等参数，除非用户明确追问。"
+    ),
+    "evidence": (
+        "〔证据态〕分两段：\n"
+        "结论：……\n"
+        "依据：……（用工具结果里提供的章节、页码或图谱路径来说明；若结果没给这些，"
+        "就说\"依据知识库检索结果\"，不要自己编章节名）\n"
+        "证据不足时，只回答已有合格证据覆盖的部分并说明具体缺失项；"
+        "完全无证据时克制说明无法据此判断，不输出通用原因、参数或操作猜测。"
+    ),
+    "diagnosis": (
+        "〔诊断态〕确有可下的诊断结论时，只输出一个 JSON：\n"
+        "{\n"
+        '  "message": "一句话总体判断",\n'
+        '  "diagnosisItems": [\n'
+        '    {"priority": "一级", "faultPart": "故障部位", "rootCause": "根本原因",\n'
+        '     "knowledgeBasis": "依据（手册/图谱/常识，常识需注明待现场确认）",\n'
+        '     "distinguishingFeature": "可由用户观察、用于区分该根因的现场特征",\n'
+        '     "suggestedCheck": "用于验证该根因的低风险检查"}\n'
+        "  ]\n"
+        "}\n"
+        "priority、faultPart、rootCause、knowledgeBasis、distinguishingFeature、suggestedCheck 六个字段都要有；"
+        "后两个字段必须来自当前证据或对候选根因的可观察区分，不得编造精确参数。"
+        "若证据不足以支撑结论、或需要用户补充信息，不要套这个 JSON，改用自然语言追问或说明。"
+    ),
+    "step": (
+        "〔步骤态〕纯文本，每步换行：\n"
+        "诊断结论：……\n"
+        "步骤一：操作名称\n"
+        "操作内容：……\n"
+        "所需工具：……\n"
+        "（安全注意：仅在该步真涉及风险——通电/高压、高温、化学品、旋转部件、重物吊装——时才写，"
+        "并写具体防护；普通步骤不写这一行，不要为凑格式硬加。）\n"
+        "步骤二：……\n"
+        "精确参数无依据时按【最高原则】第2条处理。\n"
+        "步骤严格按手册的\"安装步骤\"来：手册列了几步就讲几步，不要增删、拆分或合并步骤；"
+        "不要套用\"第一步安全准备、最后一步验证复原\"这类通用模板去硬加手册没有的步骤（如\"功能验证\"\"通电测试\"）。"
+        "部件清单/参数表里的螺栓规格、扭矩、工具型号可以引用，但只放进对应步骤的说明、或集中放在末尾的\"补充说明\"，"
+        "绝不把一个零件规格单独拆成一步（例如别因为清单里有\"M6×30螺栓\"就新增一个\"紧固螺栓\"步骤）。"
+        "手册（含部件清单）里都查不到的精确参数，按【最高原则】第2条只给方向、提示以手册为准。"
+    ),
+}
+
+# 意图路由产出的 answer_style → 上面 4 种契约的映射（不改路由器，在主 agent 侧收敛）
+_ANSWER_STYLE_TO_CONTRACT = {
+    "plain_conversational": "conversational",
+    "structured_brief": "conversational",
+    "evidence_answer": "evidence",
+    "document_explanation": "evidence",
+    "diagnosis_brief": "diagnosis",
+    "step_guidance": "step",
+    "procedure_plan": "step",
+}
+
+
+FIX_AGENT_MEMORY_RULES = """
+## 长期记忆使用规则
+
+上下文中的「长期记忆目录」是该用户的记忆索引（条目格式：[name] (type) — 摘要）。你同时是记忆的读者、作者和遗忘者。
+
+读取：目录中某条与当前问题相关、且需要超出摘要的细节时，才调用 read_memory(name)；摘要本身已够用就不必读。
+
+写入（save_memory）只记"已建立共识"：
+- 该存：用户亲口陈述的事实/规则/纠正；你建议且用户明确接受的约定。
+- 不存：你单方面的建议或推测；当下对话才需要的临时信息；能从知识库/图谱/任务记录里查到的内容。
+- type 五选一：user=关于用户本人的画像，含①交互偏好（回复语言/风格/详略，如"用中文""回复简洁些"）②身份/角色/专长（如"我是钳工""我负责装配线""我是新手"），每轮都会生效；unresolved=用户明确表达的未完成待办/未答复问题（见下方专项）；feedback=要遵守的操作规则（必须写 why=该规则成立的外部原因、how_to_apply=何时适用与失效信号）；project=设备/项目的客观事实；reference=去别处查的指针。
+- 写前先看目录：已有相近条目→用同名 save_memory 覆盖更新，不要另起新名重复创建。
+
+用户画像（type=user）专项——高频出错点，务必照做：
+- 触发即存：用户陈述或改变①交互偏好或②自身身份/角色/专长时，本轮就调用 save_memory(type=user)，不能只口头答应。
+- 用稳定规范 name 覆盖，同一主题永远同名（回复语言→reply-language；回复风格/详略→reply-style；用户身份角色→user-role；用户专长/经验→user-expertise）。改偏好=用同名 save_memory 覆盖（如日语改中文，就用 name=reply-language 覆盖成"中文"）；撤销=delete_memory。
+- 【反幻觉】只有本轮真的调用了 save_memory 才可以说"已记住/已写入"；没调用就别声称写过。
+- 【答案以库为准】用户问"我的偏好/身份是什么"时，以上下文【用户偏好】注入内容为准回答，不要凭本轮对话里的临时说法；若注入的偏好与用户刚说的不一致，立即用同名 save_memory 更新，使库与现实对齐。
+
+待办（type=unresolved）专项：用户用自己的话表达明确的行动意图/待办（"我明天去换轴承""我待会儿重启试试"）、或提出一个本轮没答上的问题时，存 save_memory(type=unresolved)，用稳定 name（如 replace-bearing-motor-5）。注意只记用户自己的意图，绝不把你的建议/方案当成用户的待办。该待办被完成或放弃时，用 delete_memory(同名) 关闭——开了的环要么完成关闭、要么一直留着提醒，不能丢。
+
+冲突与核验：记忆是线索不是结论。当前对话观察与记忆矛盾时，以现场观察为准，并向用户指出矛盾；改写或删除记忆前先经用户确认。
+
+删除（delete_memory）：用户明确否定/作废某条记忆的主体、或某待办已完成/放弃时删除（不是更新）；read_memory 后发现其 why 前提已不成立时，向用户确认后删除。
+"""
+
+FIX_AGENT_PROMPT_SECTIONS = {
+    "base_role": FIX_AGENT_SYSTEM_PROMPT,
+    "memory_usage": FIX_AGENT_MEMORY_RULES,
+}
+
+
+def build_fix_agent_system_prompt() -> str:
+    return "\n".join(part for part in FIX_AGENT_PROMPT_SECTIONS.values() if part).strip()
+
+
+# 记忆工具不受意图路由 tool_scope 限制（横切能力，任何意图下都可读/存/删记忆）
+_ALWAYS_ALLOWED_TOOLS = {"read_memory", "save_memory", "delete_memory"}
+_EXPERIMENT_TOOL_SETS = {
+    "rag_only": {"knowledge_retrieval"},
+    "rag_kg": {
+        "knowledge_retrieval",
+        "java_graph_diagnosis_path",
+        "java_graph_device_search",
+        "component_reverse_device",
+    },
+}
+_GRAPH_RAG_TOOL_NAMES = frozenset({
+    "java_graph_diagnosis_path",
+    "java_graph_device_search",
+    "component_reverse_device",
+})
+
+
+def _graph_item_available_for_processing(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    tier = str(item.get("quality_tier") or "")
+    if tier:
+        return tier in {"high", "medium"}
+    # Cached normalized batches from earlier releases only have
+    # ``qualification``. Raw Java rows do not, so they still pass through the
+    # current semantic-score quality gate before becoming usable.
+    return str(item.get("qualification") or "") in {"qualified", "routing_only"}
+
+
+class FixAgent(BaseAgent):
+    """
+    统一诊断 Agent
+
+    持有全部工具（知识检索 + 图谱诊断 + 设备搜索），
+    在 ReAct 循环中自主决策调用哪些工具、以什么顺序调用。
+
+    替代原有的 Orchestrator 意图路由 + 3 个子 Agent 的架构，
+    减少一轮 LLM 意图识别调用的延迟。
+    """
+
+    def __init__(self, llm_service):
+        super().__init__(llm_service)
+        self._tools = None
+
+    @property
+    def name(self) -> str:
+        return "fix_agent"
+
+    @property
+    def description(self) -> str:
+        return "设备检修AI助手：知识检索、故障诊断、维修指引"
+
+    def get_system_prompt(self) -> str:
+        return build_fix_agent_system_prompt()
+
+    def get_system_prompt_for_run(self, run_context: AgentRunContext) -> str:
+        prompt = build_fix_agent_system_prompt()
+        decision = run_context.intent_decision or {}
+        policy = decision.get("policy") or {}
+        if decision:
+            # 按意图路由给的回答风格，注入对应的那一个回答契约（4 选 1）
+            answer_style = policy.get("response_style") or decision.get("answer_style") or "plain_conversational"
+            contract_key = _ANSWER_STYLE_TO_CONTRACT.get(answer_style, "conversational")
+            contract = FIX_AGENT_RESPONSE_CONTRACTS.get(contract_key)
+            if contract:
+                prompt += "\n\n【当前回答契约】\n" + contract
+            # 合规开关：只注入安全/证据强度，纯文本规范已在骨架里，不再重复
+            if policy.get("safety_level") == "operation":
+                prompt += "\n\n本轮涉及操作，安全注意必须写具体（断电、泄压、冷却、防护等）。"
+            if policy.get("evidence_level") == "required":
+                prompt += (
+                    "\n本轮优先检索以核验设备专属结论；未找到合格资料时，"
+                    "只说明证据缺失并请求必要信息，不得用通用知识补全。"
+                )
+        prompt += (
+            "\n\n【ResponsePlan 证据决策】\n"
+            "complete：结论优先，只使用 qualified 证据回答全部要点。\n"
+            "partial：只回答已支持部分并点名缺失要点。\n"
+            "unsupported：只说明范围或证据不足，不给通用原因、参数或操作猜测。\n"
+            "conflict：列出冲突值及来源，不自行选择。\n"
+            "普通问题不要固定以‘根据手册第X页’开头；只有用户明确索要原文或页码时采用引用式表达。"
+        )
+        graph_batch = run_context.graph_pre_retrieval or {}
+        graph_status = str(graph_batch.get("status") or "")
+        qualified_graph = [
+            item for item in graph_batch.get("evidence") or []
+            if isinstance(item, dict) and item.get("qualification") == "qualified"
+        ]
+        if qualified_graph:
+            # 服务器预检索已经完成图谱查询；移除基础提示中会诱导重复调用的工具说明。
+            graph_tool_names = _GRAPH_RAG_TOOL_NAMES
+            prompt = "\n".join(
+                line for line in prompt.splitlines()
+                if not any(tool_name in line for tool_name in graph_tool_names)
+            )
+        manual_only_experiment = (
+            run_context.experiment_tool_profile == "rag_only"
+            or (
+                run_context.experiment_tool_profile == "rag_kg"
+                and bool(graph_status)
+                and not qualified_graph
+            )
+        )
+        if manual_only_experiment:
+            prompt += (
+                "\n\n【无图谱消融模式】\n"
+                "本轮只能使用 knowledge_retrieval 获取维修手册证据。"
+                "不得调用或声称使用知识图谱、图谱候选、图谱路径、设备反查或流程推荐。"
+                "设备不明确时，只能依据手册检索结果克制回答或请求补充设备信息。"
+            )
+        elif run_context.experiment_tool_profile == "rag_kg" and qualified_graph:
+            prompt += (
+                "\n\n【图谱增量装配】\n"
+                "服务器已经完成本轮图谱查询，但当前模型生成阶段只生成普通 RAG 手册基础答案。"
+                "图谱结构关系由服务端在证据审计后追加，不向本轮生成暴露图谱事实。"
+                "不要再次调用图谱工具；检查方法、拆装步骤、参数或安全要求只能通过维修手册检索。"
+            )
+        elif run_context.experiment_tool_profile == "rag_kg":
+            prompt += (
+                "\n\n【图谱增强消融模式】\n"
+                "本轮只允许使用 knowledge_retrieval、java_graph_diagnosis_path、"
+                "java_graph_device_search 和 component_reverse_device。"
+                "不得调用流程推荐、记忆或其他结构化知识工具。"
+            )
+        return prompt
+
+    def get_tools(self) -> List[Any]:
+        if self._tools is None:
+            from tools.knowledge_retrieval_tool import get_knowledge_retrieval_tool
+            from tools.knowledge_inventory_tool import get_knowledge_inventory_tool
+            from tools.graph_java_tool import (
+                get_java_graph_device_search_tool,
+                get_java_graph_diagnosis_path_tool,
+            )
+            from tools.component_reverse_device_tool import get_component_reverse_device_tool
+            from tools.conversation_detail_tool import get_conversation_detail_tool
+            from tools.procedure_recommend_tool import get_procedure_recommend_tool
+            from tools.memory_tool import (
+                get_read_memory_tool,
+                get_save_memory_tool,
+                get_delete_memory_tool,
+            )
+
+            self._tools = [
+                get_knowledge_retrieval_tool(),
+                get_knowledge_inventory_tool(),
+                get_java_graph_diagnosis_path_tool(),
+                get_java_graph_device_search_tool(),
+                get_component_reverse_device_tool(),
+                get_conversation_detail_tool(),
+                get_procedure_recommend_tool(),
+                get_read_memory_tool(),
+                get_save_memory_tool(),
+                get_delete_memory_tool(),
+            ]
+        return self._tools
+
+    def get_tools_for_run(self, run_context: AgentRunContext) -> List[Any]:
+        self.get_tools()
+        tools = self._tools or []
+        if run_context.experiment_tool_profile:
+            allowed_set = _EXPERIMENT_TOOL_SETS[run_context.experiment_tool_profile]
+            selected = [tool for tool in tools if tool.name in allowed_set]
+        else:
+            allowed = run_context.allowed_tools
+            if allowed is None:
+                selected = list(tools)
+            else:
+                allowed_set = set(allowed) | _ALWAYS_ALLOWED_TOOLS
+                selected = [tool for tool in tools if tool.name in allowed_set]
+        graph_batch = run_context.graph_pre_retrieval or {}
+        graph_status = str(graph_batch.get("status") or "")
+        diagnostics = graph_batch.get("diagnostics")
+        qualified_count = (
+            int(diagnostics.get("qualified_count") or 0)
+            if isinstance(diagnostics, dict)
+            else 0
+        )
+        # Server pre-retrieval is the only path query in a turn. Empty or
+        # unavailable results degrade to the manual chain without a retry.
+        if graph_status or (
+            run_context.experiment_tool_profile == "rag_kg" and not run_context.graph_scope
+        ):
+            selected = [tool for tool in selected if tool.name not in _GRAPH_RAG_TOOL_NAMES]
+        return selected
+
+    def _customize_tool_kwargs_for_run(
+        self,
+        tool_name: str,
+        kwargs: dict,
+        run_context: AgentRunContext,
+    ) -> dict:
+        """Inject per-request context into selected tools."""
+        visual_context = build_visual_query_context(
+            run_context.user_message,
+            run_context.enhanced_query,
+            run_context.images,
+        )
+        if tool_name in ("recall_conversation_detail", "read_memory", "save_memory", "delete_memory"):
+            kwargs["user_id"] = run_context.user_id or ""
+        if tool_name == "save_memory" and run_context.turn_ts is not None:
+            # 同轮写仲裁：注入本轮 turn_ts，与偏好兜底共用同值（漏洞#1）
+            kwargs["turn_ts"] = run_context.turn_ts
+        if tool_name in ("knowledge_retrieval", "java_graph_diagnosis_path"):
+            if run_context.images and not kwargs.get("image_urls"):
+                kwargs["image_urls"] = run_context.images
+        if tool_name == "java_graph_diagnosis_path" and visual_context.get("has_images"):
+            visible_parts = visual_context.get("visible_parts") or []
+            fault_signs = visual_context.get("fault_signs") or []
+            device_clues = visual_context.get("device_clues") or []
+            if visible_parts and not kwargs.get("component_description"):
+                kwargs["component_description"] = " ".join(str(item) for item in visible_parts)
+            if fault_signs and not kwargs.get("fault_description"):
+                kwargs["fault_description"] = " ".join(str(item) for item in fault_signs)
+            if device_clues and not kwargs.get("keyword"):
+                kwargs["keyword"] = " ".join(str(item) for item in device_clues[:2])
+        if tool_name == "java_graph_diagnosis_path":
+            graph_scope = run_context.graph_scope or {}
+            for scope_key in (
+                "allowed_path_ids",
+                "allowed_device_ids",
+                "allowed_component_ids",
+                "allowed_fault_ids",
+            ):
+                kwargs.pop(scope_key, None)
+                allowed = list(graph_scope.get(scope_key) or ())
+                kwargs[scope_key] = allowed
+        if tool_name == "knowledge_retrieval" and run_context.enhanced_query:
+            query = str(kwargs.get("query") or "").strip()
+            kwargs["query"] = run_context.enhanced_query if not query else f"{query} {run_context.enhanced_query}"
+        if tool_name == "knowledge_retrieval" and visual_context.get("retrieval_hint"):
+            query = str(kwargs.get("query") or "").strip()
+            hint = str(visual_context["retrieval_hint"]).strip()
+            if hint and hint not in query:
+                kwargs["query"] = hint if not query else f"{query} {hint}"
+        if tool_name == "knowledge_retrieval":
+            kwargs.pop("_query_contract", None)
+            if run_context.query_contract:
+                kwargs["_query_contract"] = dict(run_context.query_contract)
+            kwargs = apply_authoritative_manual_scope(
+                kwargs,
+                run_context.retrieval_scope,
+            )
+            if run_context.graph_seed_retrieval_scope:
+                kwargs["_graph_seed_scope"] = dict(run_context.graph_seed_retrieval_scope)
+        return kwargs
+
+    async def _run_with_react_contextual(
+        self,
+        input_data: AgentInput,
+        max_iterations: int,
+        _event_sink: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    ) -> AgentOutput:
+        run_context = self.build_run_context(input_data)
+
+        if self._is_knowledge_inventory_intent_for_run(run_context):
+            return await self._run_knowledge_inventory_direct_for_run(run_context)
+
+        output = await super().run_with_react(input_data, max_iterations, _event_sink=_event_sink)
+        self._attach_pre_retrieved_graph(output, run_context)
+        if run_context.intent_decision:
+            output.metadata["intent_decision"] = run_context.intent_decision
+        self._attach_minimum_requirement_check(output, run_context)
+
+        react_status = self._parse_react_status(output.message)
+        if react_status:
+            output.metadata["react_status"] = react_status
+            if react_status.get("status") == "needs_user_clarification":
+                output.message = self._format_user_clarification_message(react_status)
+
+        if self._needs_more_tools(output) and run_context.allowed_tools is not None and not run_context.experiment_tool_profile:
+            logger.info("[fix_agent] intent tool scope insufficient, rerunning once with full tools")
+            rerun_input = self._without_tool_scope(input_data)
+            rerun = await super().run_with_react(rerun_input, max_iterations, _event_sink=_event_sink)
+            rerun_context = self.build_run_context(rerun_input)
+            rerun.metadata["intent_decision"] = rerun_context.intent_decision
+            rerun.metadata["intent_rerun_reason"] = react_status.get("reason") if react_status else output.message
+            if react_status:
+                rerun.metadata["react_status_before_rerun"] = react_status
+            rerun.metadata["intent_rerun_with_full_tools"] = True
+            self._attach_minimum_requirement_check(rerun, rerun_context)
+            output = rerun
+
+        # A 硬兜底：evidence-required 意图却没调 knowledge_retrieval → 强制检索 + 据证据重答
+        forced = await self.grounded_fallback_if_unretrieved(input_data, output.tools_used or [])
+        if forced is not None:
+            self._attach_pre_retrieved_graph(forced, run_context)
+            return forced
+
+        output = self._finalize_react_knowledge_output(output, run_context)
+        return output
+
+    @staticmethod
+    def _attach_pre_retrieved_graph(
+        output: AgentOutput,
+        run_context: AgentRunContext,
+    ) -> None:
+        batch = dict(run_context.graph_pre_retrieval or {})
+        status = str(batch.get("status") or "")
+        evidence = [
+            item for item in batch.get("evidence") or []
+            if _graph_item_available_for_processing(item)
+        ]
+        if status != "found" or not evidence:
+            return
+        trace = output.metadata.setdefault("react_trace", [])
+        if not isinstance(trace, list):
+            trace = []
+            output.metadata["react_trace"] = trace
+        for step in trace:
+            calls = step.get("tool_calls") if isinstance(step, dict) else None
+            if any(
+                isinstance(call, dict)
+                and call.get("name") == "java_graph_diagnosis_path"
+                and (call.get("arguments") or {}).get("server_controlled") is True
+                for call in calls or []
+            ):
+                return
+        trace.insert(0, {
+            "iteration": 0,
+            "action": "server_pre_retrieval",
+            "tool_calls": [{
+                "name": "java_graph_diagnosis_path",
+                "arguments": {
+                    "server_controlled": True,
+                    "graph_scope": dict(run_context.graph_scope or {}),
+                },
+                "executed": True,
+                "execution_status": "server_pre_retrieval",
+                "result_summary": f"{status}: {batch.get('reason') or ''}".strip(),
+                "result_data": batch,
+                "evidence": list(batch.get("evidence") or []),
+            }],
+        })
+        output.metadata["graph_pre_retrieval"] = batch
+        if "java_graph_diagnosis_path" not in output.tools_used:
+            output.tools_used.append("java_graph_diagnosis_path")
+
+    async def grounded_fallback_if_unretrieved(
+        self,
+        input_data: AgentInput,
+        used_tools: List[str],
+    ) -> Optional[AgentOutput]:
+        """补齐高证据需求的检索，并在缺少合格资料时克制回答。
+
+        已调用知识检索时由主 ReAct 根据工具的 EvidenceBundle 决定可用范围。
+        仅在路由要求检索且本轮完全未检索时补一次，以便判断资料覆盖情况。
+        """
+        run_context = self.build_run_context(input_data)
+        required = self._required_tools_for_policy(run_context)
+        if "knowledge_retrieval" not in required:
+            return None
+        if "knowledge_retrieval" in set(used_tools or []):
+            return None
+        return await self.force_grounded_answer(input_data, run_context)
+
+    async def force_grounded_answer(
+        self,
+        input_data: AgentInput,
+        run_context: AgentRunContext,
+    ) -> Optional[AgentOutput]:
+        """强制检索手册证据并据此生成回答（CRAG 式纠正动作）。
+        检索失败、为空或生成异常时，返回同一 ResponsePlan 的确定性降级答案。
+        """
+        from tools.knowledge_retrieval_tool import get_knowledge_retrieval_tool
+        from services.llm.service import get_llm_service
+
+        start = time.time()
+        query = (input_data.user_message or "").strip()
+        if not query:
+            return None
+        scope = run_context.retrieval_scope or {}
+        try:
+            retrieval_kwargs = build_manual_retrieval_kwargs(
+                query,
+                scope,
+                top_k=5,
+                query_contract=run_context.query_contract,
+            )
+            if run_context.graph_seed_retrieval_scope:
+                retrieval_kwargs["_graph_seed_scope"] = dict(
+                    run_context.graph_seed_retrieval_scope
+                )
+            retrieval = await get_knowledge_retrieval_tool().run(**retrieval_kwargs)
+        except Exception as exc:
+            logger.warning("[fix_agent][forced_retrieval] 检索异常: %s", exc)
+            # 检索本身报错：无法验证证据，evidence-required 意图不能放行可能编造的原答案
+            return self._insufficient_evidence_output(query, run_context, reason="retrieval_error")
+        logger.info(
+            "[fix_agent][forced_retrieval][DEBUG] query=%r success=%s data_len=%s scope=%s",
+            query, retrieval.success,
+            len(retrieval.data) if retrieval.data else 0, scope,
+        )
+        if not retrieval.success or not retrieval.data:
+            logger.info("[fix_agent][forced_retrieval] no evidence; returning deterministic unsupported answer")
+            return await self._generic_guidance_output(query, run_context, reason="empty_retrieval")
+
+        evidence_items = retrieval.data
+        serialized_evidence = [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in evidence_items
+        ]
+        trace = [{
+            "iteration": 1,
+            "action": "tool_call",
+            "tool_calls": [{
+                "name": "knowledge_retrieval",
+                "arguments": {"query": query, "top_k": 5},
+                "result_summary": str(evidence_items)[:200],
+                "result_data": serialized_evidence,
+            }],
+        }]
+        graph_batch = dict(run_context.graph_pre_retrieval or {})
+        graph_evidence = [
+            item for item in graph_batch.get("evidence") or []
+            if _graph_item_available_for_processing(item)
+        ]
+        if str(graph_batch.get("status") or "") == "found" and graph_evidence:
+            trace.insert(0, {
+                "iteration": 0,
+                "action": "server_pre_retrieval",
+                "tool_calls": [{
+                    "name": "java_graph_diagnosis_path",
+                    "arguments": {
+                        "server_controlled": True,
+                        "graph_scope": dict(run_context.graph_scope or {}),
+                    },
+                    "executed": True,
+                    "execution_status": "server_pre_retrieval",
+                    "result_summary": f"{graph_batch.get('status')}: {graph_batch.get('reason') or ''}".strip(),
+                    "result_data": graph_batch,
+                    "evidence": list(graph_batch.get("evidence") or []),
+                }],
+            })
+        ledger = EvidenceLedger.from_react_trace({"react_trace": trace})
+        first_metadata = getattr(evidence_items[0], "metadata", {}) or {}
+        evidence_bundle = dict(first_metadata.get("evidence_bundle") or {})
+        evidence_bundle = fuse_evidence_support(
+            query,
+            evidence_bundle,
+            ledger,
+            query_contract=run_context.intent_decision,
+        )
+        response_plan = build_response_plan(query, evidence_bundle, ledger)
+        if response_plan.coverage_status == "conflict":
+            return self._response_plan_output(
+                response_plan,
+                response_plan.deterministic_fallback(),
+                trace=trace,
+                run_context=run_context,
+                start=start,
+                audit_passed=True,
+                audit_violations=(),
+                used_fallback=True,
+            )
+
+        qualified_items = [
+            item for item in evidence_items
+            if (item.metadata or {}).get("qualification") == "qualified"
+        ]
+        if not qualified_items:
+            logger.info("[fix_agent][forced_retrieval] no qualified evidence; returning deterministic unsupported answer")
+            return await self._generic_guidance_output(query, run_context, reason="reference_only")
+
+        # Qualified evidence may be summarized by the model; it is not an
+        # instruction to reproduce manual wording.
+        evidence_items = qualified_items
+        low_confidence = False
+        serialized_evidence = [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in evidence_items
+        ]
+        manual_call = next(
+            call
+            for step in trace
+            for call in step.get("tool_calls") or []
+            if call.get("name") == "knowledge_retrieval"
+        )
+        manual_call["result_data"] = serialized_evidence
+        ledger = EvidenceLedger.from_react_trace({"react_trace": trace})
+        evidence_bundle = fuse_evidence_support(
+            query,
+            evidence_bundle,
+            ledger,
+            query_contract=run_context.intent_decision,
+        )
+        response_plan = build_response_plan(query, evidence_bundle, ledger)
+        evidence_text = "\n\n".join(
+            self._forced_evidence_to_text(item, idx)
+            for idx, item in enumerate(evidence_items, start=1)
+        )
+        mentions_device = self._mentions_specific_device(query, scope)
+        device_notice = ""
+        if not mentions_device:
+            device_notice = "请说明片段对应的具体型号尚未确认，设备专属参数仍须以用户设备手册或铭牌为准。"
+
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是设备检修助手。以下材料已通过当前设备和主题的最低资格校验。"
+                    "请用自己的语言总结、解释并回答用户，不要逐字复述手册。"
+                    "精确参数、原因和专属步骤只能在材料明确覆盖时使用；未覆盖处必须说明缺失，不得补写。"
+                    + response_plan.generation_instructions()
+                    + "始终用中文，不要出现内部标识或 emoji。"
+                    + device_notice
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"用户问题：{query}\n\n可用资料：\n{evidence_text}\n\n"
+                    "请严格基于这些资料作答。"
+                ),
+            },
+        ]
+        try:
+            response = await get_llm_service().chat(messages=messages, temperature=0.1)
+        except Exception as exc:
+            logger.warning("[fix_agent][forced_retrieval] 生成异常: %s", exc)
+            return self._response_plan_output(
+                response_plan,
+                response_plan.deterministic_fallback(),
+                trace=trace,
+                run_context=run_context,
+                start=start,
+                audit_passed=False,
+                audit_violations=("generation_error",),
+                used_fallback=True,
+            )
+
+        draft = response.get("content", "") if isinstance(response, dict) else str(response or "")
+        audited = finalize_response(response_plan, draft)
+        logger.info(
+            "[fix_agent][forced_retrieval] 已强制检索并据证据重答 evidence=%d",
+            len(evidence_items),
+        )
+        return self._response_plan_output(
+            response_plan,
+            audited.answer,
+            trace=trace,
+            run_context=run_context,
+            start=start,
+            audit_passed=audited.passed,
+            audit_violations=audited.violations,
+            used_fallback=audited.used_fallback,
+            audit_metadata=audited.to_metadata(),
+            raw_response=response if isinstance(response, dict) else None,
+            retrieval_top_score=evidence_items[0].score if evidence_items else 0.0,
+        )
+
+    def _response_plan_output(
+        self,
+        plan,
+        message: str,
+        *,
+        trace: list[dict[str, Any]],
+        run_context: AgentRunContext,
+        start: float,
+        audit_passed: bool,
+        audit_violations: tuple[str, ...],
+        used_fallback: bool,
+        audit_metadata: Optional[dict[str, Any]] = None,
+        raw_response: Optional[dict[str, Any]] = None,
+        retrieval_top_score: float = 0.0,
+        low_confidence: bool = False,
+    ) -> AgentOutput:
+        graph_batch = dict(run_context.graph_pre_retrieval or {})
+        graph_evidence = [
+            item for item in graph_batch.get("evidence") or []
+            if _graph_item_available_for_processing(item)
+        ]
+        used_tools = ["knowledge_retrieval"]
+        if str(graph_batch.get("status") or "") == "found" and graph_evidence:
+            used_tools.append("java_graph_diagnosis_path")
+        return AgentOutput(
+            agent_name=self.name,
+            message=message,
+            tools_used=used_tools,
+            metadata={
+                "execution_mode": "forced_retrieval_grounded",
+                "react_trace": trace,
+                "react_iterations": 1,
+                "intent_decision": run_context.intent_decision,
+                "low_confidence_retrieval": low_confidence,
+                "retrieval_top_score": retrieval_top_score,
+                "graph_pre_retrieval": graph_batch,
+                "graph_scope": dict(run_context.graph_scope or {}),
+                **plan.to_metadata(),
+                **(audit_metadata or {}),
+                "response_audit": {
+                    "passed": audit_passed,
+                    "violations": list(audit_violations),
+                    "used_fallback": used_fallback,
+                },
+            },
+            latency_ms=int((time.time() - start) * 1000),
+            raw_response=raw_response,
+        )
+
+    def _finalize_react_knowledge_output(
+        self,
+        output: AgentOutput,
+        run_context: AgentRunContext,
+    ) -> AgentOutput:
+        if "knowledge_retrieval" not in set(output.tools_used or []):
+            return output
+        trace = output.metadata.get("react_trace") or []
+        bundle = self._merged_knowledge_bundle(trace)
+        if not bundle:
+            return output
+        ledger = EvidenceLedger.from_react_trace({"react_trace": trace})
+        bundle = fuse_evidence_support(
+            run_context.user_message,
+            bundle,
+            ledger,
+            query_contract=run_context.intent_decision,
+        )
+        plan = build_response_plan(run_context.user_message, bundle, ledger)
+        audited = finalize_response(plan, output.message)
+        output.message = audited.answer
+        output.metadata.update(plan.to_metadata())
+        output.metadata.update(audited.to_metadata())
+        output.metadata["response_audit"] = {
+            "passed": audited.passed,
+            "violations": list(audited.violations),
+            "used_fallback": audited.used_fallback,
+        }
+        return output
+
+    @staticmethod
+    def _merged_knowledge_bundle(trace: list[dict[str, Any]]) -> dict[str, Any]:
+        calls: list[tuple[str, dict[str, Any]]] = []
+        for step in trace or []:
+            step_calls = step.get("tool_calls") if isinstance(step, dict) else None
+            for call in step_calls or []:
+                if not isinstance(call, dict) or call.get("name") != "knowledge_retrieval":
+                    continue
+                bundle: dict[str, Any] = {}
+                for key in ("result_data", "data", "result"):
+                    payload = call.get(key)
+                    if isinstance(payload, dict):
+                        bundle = dict(payload)
+                        break
+                    if isinstance(payload, list):
+                        for item in payload:
+                            if not isinstance(item, dict):
+                                continue
+                            metadata = item.get("metadata") or {}
+                            nested = metadata.get("evidence_bundle") if isinstance(metadata, dict) else None
+                            if isinstance(nested, dict):
+                                bundle = dict(nested)
+                                break
+                        if bundle:
+                            break
+                if not bundle:
+                    continue
+                arguments = call.get("effective_arguments")
+                if not isinstance(arguments, dict):
+                    arguments = call.get("arguments")
+                fingerprint = ""
+                if isinstance(arguments, dict):
+                    fingerprint = str(arguments.get("scope_fingerprint") or "").strip()
+                if not fingerprint:
+                    fingerprint = str(bundle.get("scope_fingerprint") or "").strip()
+                calls.append((fingerprint, bundle))
+
+        if not calls:
+            return {}
+
+        # A later server-authoritative scope supersedes every earlier scope.
+        target_fingerprint = next(
+            (fingerprint for fingerprint, _ in reversed(calls) if fingerprint),
+            "",
+        )
+        selected = [
+            bundle
+            for fingerprint, bundle in calls
+            if not target_fingerprint or fingerprint == target_fingerprint
+        ]
+        if not selected:
+            return {}
+
+        merged = dict(selected[-1])
+
+        def row_key(row: dict[str, Any]) -> str:
+            metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+            document_id = str(
+                metadata.get("document_id") or row.get("document_id") or ""
+            ).strip()
+            for key in (
+                "evidence_id",
+                "doc_id",
+                "id",
+                "chunk_uid",
+                "source_chunk_uid",
+                "chunk_id",
+            ):
+                value = str(row.get(key) or metadata.get(key) or "").strip()
+                if value:
+                    return f"{document_id}:{key}:{value}"
+            return json.dumps(row, ensure_ascii=False, sort_keys=True, default=str)
+
+        def merge_rows(field: str) -> list[dict[str, Any]]:
+            rows: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for bundle in selected:
+                for raw in bundle.get(field) or []:
+                    if not isinstance(raw, dict):
+                        continue
+                    row = dict(raw)
+                    identity = row_key(row)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
+                    rows.append(row)
+            return rows
+
+        for field in (
+            "qualified_evidence",
+            "reference_evidence",
+            "excluded_evidence",
+            "conflicts",
+            "conflict_eligible",
+        ):
+            merged[field] = merge_rows(field)
+
+        aspect_order: list[str] = []
+        aspect_rows: dict[str, dict[str, Any]] = {}
+        all_aspect_ids: list[str] = []
+        for bundle in selected:
+            for raw in bundle.get("aspect_support") or []:
+                if not isinstance(raw, dict):
+                    continue
+                aspect_id = str(raw.get("aspect_id") or "").strip()
+                if not aspect_id:
+                    continue
+                if aspect_id not in all_aspect_ids:
+                    all_aspect_ids.append(aspect_id)
+                if aspect_id not in aspect_rows:
+                    aspect_order.append(aspect_id)
+                    aspect_rows[aspect_id] = dict(raw)
+                    aspect_rows[aspect_id]["evidence_ids"] = []
+                    aspect_rows[aspect_id]["supported"] = False
+                current = aspect_rows[aspect_id]
+                for key, value in raw.items():
+                    if key in {"supported", "evidence_ids"}:
+                        continue
+                    if current.get(key) in (None, "", [], {}):
+                        current[key] = value
+                current["supported"] = bool(current["supported"] or raw.get("supported"))
+                current["evidence_ids"] = list(dict.fromkeys([
+                    *current.get("evidence_ids", []),
+                    *(str(value) for value in raw.get("evidence_ids") or [] if str(value).strip()),
+                ]))
+            for aspect_id in bundle.get("missing_aspect_ids") or []:
+                value = str(aspect_id or "").strip()
+                if value and value not in all_aspect_ids:
+                    all_aspect_ids.append(value)
+
+        merged["aspect_support"] = [aspect_rows[aspect_id] for aspect_id in aspect_order]
+        supported_ids = [
+            aspect_id
+            for aspect_id in aspect_order
+            if aspect_rows[aspect_id].get("supported")
+        ]
+        merged["supported_aspect_ids"] = supported_ids
+        merged["missing_aspect_ids"] = [
+            aspect_id for aspect_id in all_aspect_ids if aspect_id not in supported_ids
+        ]
+
+        capabilities: dict[str, Any] = {}
+        for bundle in selected:
+            for key, value in (bundle.get("capabilities") or {}).items():
+                if isinstance(value, bool):
+                    capabilities[key] = bool(capabilities.get(key) or value)
+                elif isinstance(value, list):
+                    capabilities[key] = list(dict.fromkeys([
+                        *(capabilities.get(key) or []),
+                        *value,
+                    ]))
+                elif value not in (None, ""):
+                    capabilities[key] = value
+
+        conflicts = merged["conflict_eligible"] or merged["conflicts"]
+        qualified = merged["qualified_evidence"]
+        references = merged["reference_evidence"]
+        if conflicts:
+            coverage_status, coverage_reason = "conflict", "unresolved_conflict"
+        elif not qualified:
+            coverage_status, coverage_reason = "unsupported", "zero_qualified_evidence"
+        elif not supported_ids:
+            coverage_status, coverage_reason = "unsupported", "zero_supported_aspects"
+        elif merged["missing_aspect_ids"]:
+            coverage_status, coverage_reason = "partial", "missing_aspects"
+        else:
+            coverage_status, coverage_reason = "complete", "all_aspects_supported"
+
+        if conflicts:
+            capabilities["may_emit_exact_parameter"] = False
+            capabilities["may_emit_device_specific_procedure"] = False
+            capabilities["may_offer_generic_guidance"] = False
+        merged["capabilities"] = capabilities
+        merged["coverage_status"] = coverage_status
+        merged["coverage_reason"] = coverage_reason
+        merged["overall_status"] = (
+            "qualified"
+            if qualified and not conflicts
+            else "reference_only"
+            if references or conflicts
+            else "no_evidence"
+        )
+        merged["summary"] = {
+            **(merged.get("summary") or {}),
+            "qualified_count": len(qualified),
+            "reference_count": len(references),
+            "excluded_count": len(merged["excluded_evidence"]),
+        }
+        merged["scope_fingerprint"] = target_fingerprint
+        return merged
+
+    @staticmethod
+    def _latest_knowledge_bundle(trace: list[dict[str, Any]]) -> dict[str, Any]:
+        return FixAgent._merged_knowledge_bundle(trace)
+
+    async def _generic_guidance_output(
+        self,
+        query: str,
+        run_context: AgentRunContext,
+        reason: str,
+    ) -> AgentOutput:
+        """Return a deterministic unsupported plan without another model call."""
+        plan = build_response_plan(
+            query,
+            {
+                "coverage_status": "unsupported",
+                "coverage_reason": reason,
+                "aspect_support": [],
+                "missing_aspect_ids": [],
+                "conflict_eligible": [],
+                "capabilities": {"may_offer_generic_guidance": False},
+            },
+            EvidenceLedger(),
+        )
+        message = plan.deterministic_fallback()
+        return AgentOutput(
+            agent_name=self.name,
+            message=message,
+            tools_used=["knowledge_retrieval"],
+            metadata={
+                "execution_mode": "generic_guidance",
+                "evidence_status": "no_evidence",
+                "deterministic_direct": True,
+                "insufficient_evidence_reason": reason,
+                "intent_decision": run_context.intent_decision,
+                **plan.to_metadata(),
+                "react_iterations": 1,
+                "react_trace": [{
+                    "iteration": 1,
+                    "action": "tool_call",
+                    "tool_calls": [{
+                        "name": "knowledge_retrieval",
+                        "arguments": {"query": query, "top_k": 5},
+                        "result_summary": reason,
+                        "result_data": [],
+                    }],
+                }],
+            },
+        )
+
+    def _insufficient_evidence_output(
+        self,
+        query: str,
+        run_context: AgentRunContext,
+        reason: str,
+    ) -> AgentOutput:
+        """evidence-required 意图强制检索却拿不到任何证据时的降级答案。
+
+        核心原则：宁可明说"没找到"，也不放行模型凭自身知识编造的精确参数/步骤。
+        这是 RAG 无证据分层降级的最后一道防线——检索为空 = 不能给确定性技术结论。
+        见记忆 rag-no-evidence-tiered-degradation。
+        """
+        decision = run_context.intent_decision or {}
+        intent = decision.get("intent") or ""
+        # 参数/诊断/维修类问题：编造精确值风险最高，措辞最保守
+        message = (
+            "知识库中未找到与该问题直接相关的手册依据，暂时无法给出确定的答案。\n"
+            "为避免提供不准确的参数或步骤，这里不做推测。建议：\n"
+            "1. 确认相关设备手册是否已导入知识库；\n"
+            "2. 补充设备型号或更具体的部件、故障描述，便于重新检索；\n"
+            "3. 涉及精确参数（扭矩、间隙、压力等）时，以设备实际手册或铭牌为准。"
+        )
+        return AgentOutput(
+            agent_name=self.name,
+            message=message,
+            tools_used=["knowledge_retrieval"],
+            metadata={
+                "execution_mode": "insufficient_evidence_guard",
+                "insufficient_evidence_reason": reason,
+                "blocked_for_insufficient_evidence": True,
+                "deterministic_direct": True,  # 跳过 review，保留 blocked 标志
+                "intent_decision": run_context.intent_decision,
+                "react_iterations": 1,
+                "react_trace": [{
+                    "iteration": 1,
+                    "action": "tool_call",
+                    "tool_calls": [{
+                        "name": "knowledge_retrieval",
+                        "arguments": {"query": query, "top_k": 5},
+                        "result_summary": f"empty ({reason})",
+                        "result_data": [],
+                    }],
+                }],
+            },
+        )
+
+    @staticmethod
+    def _mentions_specific_device(query: str, scope: dict = None) -> bool:
+        """判断用户是否给出了"具体设备型号"（而非泛称）。
+
+        判据（任一成立即视为报了型号）：
+        1. 会话已绑定 device_type（scope 里有）——说明设备已确认；
+        2. 问题里出现型号特征串：字母+数字组合（如 LG16、D6114、CAT320）、
+           或"XX型/XX系列"。
+        纯泛称（如"冷水机组""空压机""泵""旧机器"）不算——这些无法定位到具体手册，
+        应触发设备确认提醒。
+        """
+        import re as _re
+        if scope and scope.get("device_type"):
+            return True
+        q = query or ""
+        # 字母(≥1)+数字(≥2) 的型号串，如 LG16 / D6114 / 320D
+        if _re.search(r"[A-Za-z]{1,6}[-\s]?\d{2,6}", q) or _re.search(r"\d{2,6}[-\s]?[A-Za-z]{1,6}", q):
+            return True
+        # "XX型号是..."这类显式表述
+        if _re.search(r"型号\s*[:：是为]", q):
+            return True
+        return False
+
+    @staticmethod
+    def _forced_evidence_to_text(item: Any, index: int) -> str:
+        data = item.model_dump() if hasattr(item, "model_dump") else (item if isinstance(item, dict) else {})
+        metadata = data.get("metadata") or {}
+        content = data.get("content") or data.get("text") or ""
+        page = metadata.get("page_number") or metadata.get("page")
+        section = metadata.get("section_title") or ""
+        parts = []
+        if section:
+            parts.append(str(section).replace("\n", " ").strip())
+        if page:
+            parts.append(f"第{page}页")
+        head = f"[手册片段{index}｜{' · '.join(parts)}]" if parts else f"[手册片段{index}]"
+        return f"{head}\n{content}"
+
+    @staticmethod
+    def _without_tool_scope(input_data: AgentInput) -> AgentInput:
+        rerun_input = input_data.model_copy(deep=True)
+        rerun_context = dict(rerun_input.context or {})
+        intent_decision = dict(rerun_context.get("intent_decision") or {})
+        policy = dict(intent_decision.get("policy") or {})
+        policy["tool_scope"] = None
+        intent_decision["policy"] = policy
+        intent_decision["allowed_tools"] = None
+        rerun_context["intent_decision"] = intent_decision
+        rerun_input.context = rerun_context
+        return rerun_input
+
+    @staticmethod
+    def _required_tools_for_policy(run_context: AgentRunContext) -> List[str]:
+        from services.routing.graph_policy import decide_graph_use
+
+        decision = run_context.intent_decision or {}
+        policy = decision.get("policy") or {}
+        intent = decision.get("intent")
+        required: List[str] = []
+        if run_context.experiment_tool_profile:
+            if (
+                intent in {
+                    "knowledge_query",
+                    "parameter_query",
+                    "fault_diagnosis",
+                    "maintenance_guidance",
+                    "procedure_planning",
+                    "document_understanding",
+                }
+                or policy.get("requires_knowledge_retrieval")
+                or decision.get("requires_knowledge_retrieval")
+            ):
+                required.append("knowledge_retrieval")
+            graph_decision = decide_graph_use(
+                "graph_full" if run_context.experiment_tool_profile == "rag_kg" else "no_graph",
+                decision,
+            )
+            graph_status = str((run_context.graph_pre_retrieval or {}).get("status") or "")
+            if graph_decision.pre_retrieval_enabled and not graph_status:
+                required.append("java_graph_diagnosis_path")
+            return list(dict.fromkeys(required))
+        if intent == "knowledge_inventory":
+            required.append("knowledge_inventory")
+        if (
+            intent in {"knowledge_query", "parameter_query", "fault_diagnosis", "maintenance_guidance", "procedure_planning", "document_understanding"}
+            or policy.get("requires_knowledge_retrieval")
+            or decision.get("requires_knowledge_retrieval")
+        ):
+            required.append("knowledge_retrieval")
+        graph_decision = decide_graph_use("production", decision)
+        graph_status = str((run_context.graph_pre_retrieval or {}).get("status") or "")
+        if graph_decision.pre_retrieval_enabled and not graph_status:
+            required.append("java_graph_diagnosis_path")
+        if intent in {"maintenance_guidance", "procedure_planning"}:
+            required.append("procedure_recommend")
+        return list(dict.fromkeys(required))
+
+    def _attach_minimum_requirement_check(
+        self,
+        output: AgentOutput,
+        run_context: AgentRunContext,
+    ) -> None:
+        required_tools = self._required_tools_for_policy(run_context)
+        used_tools = set(output.tools_used or [])
+        missing_tools = [name for name in required_tools if name not in used_tools]
+        decision = run_context.intent_decision or {}
+        policy = decision.get("policy") or {}
+        requires_safety_notice = bool(
+            decision.get("requires_safety_notice")
+            or policy.get("safety_level") == "operation"
+            or decision.get("intent") in {"maintenance_guidance", "procedure_planning"}
+        )
+        output.metadata["agent_policy_check"] = {
+            "required_tools": required_tools,
+            "missing_tools": missing_tools,
+            "requires_safety_notice": requires_safety_notice,
+            "satisfied": not missing_tools,
+        }
+
+    @staticmethod
+    def _is_knowledge_inventory_intent_for_run(run_context: AgentRunContext) -> bool:
+        decision = run_context.intent_decision or {}
+        return decision.get("intent") == "knowledge_inventory"
+
+    async def _run_knowledge_inventory_direct_for_run(
+        self,
+        run_context: AgentRunContext,
+    ) -> AgentOutput:
+        start_time = time.time()
+        tools = self.get_tools_for_run(run_context)
+        inventory_tool = next((tool for tool in tools if tool.name == "knowledge_inventory"), None)
+        if inventory_tool is None:
+            return AgentOutput(
+                agent_name=self.name,
+                message="暂时无法确认知识库文件列表：缺少 knowledge_inventory 工具。",
+                tools_used=[],
+                metadata={
+                    "execution_mode": "knowledge_inventory_direct",
+                    "intent_decision": run_context.intent_decision,
+                    "status": "tool_missing",
+                },
+                latency_ms=int((time.time() - start_time) * 1000),
+            )
+
+        result = await inventory_tool.run()
+        if not result.success:
+            error_message = result.error.message if result.error else "unknown error"
+            return AgentOutput(
+                agent_name=self.name,
+                message=f"暂时无法确认知识库文件列表：{error_message}",
+                tools_used=["knowledge_inventory"],
+                metadata={
+                    "execution_mode": "knowledge_inventory_direct",
+                    "intent_decision": run_context.intent_decision,
+                    "status": "tool_error",
+                    "error_detail": error_message,
+                },
+                latency_ms=int((time.time() - start_time) * 1000),
+            )
+
+        data = result.data or {}
+        documents = data.get("documents") or []
+        return AgentOutput(
+            agent_name=self.name,
+            message=self._format_knowledge_inventory_message(documents),
+            tools_used=["knowledge_inventory"],
+            metadata={
+                "execution_mode": "knowledge_inventory_direct",
+                "intent_decision": run_context.intent_decision,
+                "knowledge_inventory_total": len(documents),
+                "knowledge_inventory_source": data.get("source"),
+                "agent_policy_check": {
+                    "required_tools": ["knowledge_inventory"],
+                    "missing_tools": [],
+                    "satisfied": True,
+                },
+            },
+            latency_ms=int((time.time() - start_time) * 1000),
+        )
+
+    async def run_with_react(
+        self,
+        input_data: AgentInput,
+        max_iterations: int = 10,
+        _event_sink: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    ) -> AgentOutput:
+        """
+        重写 ReAct 入口，提取 user_id 供 recall_conversation_detail 工具使用。
+        """
+        return await self._run_with_react_contextual(input_data, max_iterations, _event_sink=_event_sink)
+
+    @staticmethod
+    def _format_knowledge_inventory_message(documents: List[Dict[str, Any]]) -> str:
+        if not documents:
+            return "知识库中目前没有已导入的知识文件。"
+
+        lines = [f"知识库中目前共有{len(documents)}个已导入的知识文件，具体如下："]
+        for index, doc in enumerate(documents, start=1):
+            name = str(doc.get("manual_name") or "").strip() or f"未命名手册 {index}"
+            status = str(doc.get("status") or "-").strip()
+            text_count = int(doc.get("text_count") or 0)
+            image_count = int(doc.get("image_count") or 0)
+            table_count = int(doc.get("table_count") or 0)
+            created_at = str(doc.get("created_at") or "").strip()
+            detail = f"含{text_count}段文本、{image_count}张图片、{table_count}个表格，状态为 {status}"
+            if created_at:
+                detail += f"，入库时间：{created_at}"
+            detail += "。"
+
+            lines.append("")
+            lines.append(f"{index}. 《{name}》")
+            lines.append(detail)
+
+        lines.append("")
+        lines.append("请告诉我你最关注的信息：")
+        lines.append("")
+        lines.append("1. 具体设备、部件或故障现象")
+        lines.append("2. 维修步骤或安全注意事项")
+        lines.append("3. 参数标准、图片内容或表格信息")
+
+        return "\n".join(lines).strip()
+
+    async def run_with_react_stream(self, input_data: AgentInput, max_iterations: int = 10):
+        """重写流式 ReAct 入口，同样提取 user_id"""
+        async for event in super().run_with_react_stream(input_data, max_iterations):
+            yield event
+        return
+
+    @staticmethod
+    def _needs_more_tools(output: AgentOutput) -> bool:
+        status = output.metadata.get("react_status") or FixAgent._parse_react_status(output.message)
+        if status and status.get("status") == "needs_more_tools":
+            return True
+        message = (output.message or "").strip()
+        return message.startswith("NEEDS_MORE_TOOLS:")
+
+    @staticmethod
+    def _parse_react_status(message: str) -> Optional[Dict[str, Any]]:
+        text = (message or "").strip()
+        if not text:
+            return None
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        status = data.get("status")
+        if status not in {"needs_more_tools", "needs_user_clarification", "final_answer"}:
+            return None
+        needed_tools = data.get("needed_tools")
+        if needed_tools is not None and not isinstance(needed_tools, list):
+            data["needed_tools"] = [str(needed_tools)]
+        return data
+
+    @staticmethod
+    def _format_user_clarification_message(status: Dict[str, Any]) -> str:
+        parts: List[str] = []
+        general_answer = str(status.get("general_answer") or "").strip()
+        if general_answer:
+            parts.append(general_answer)
+
+        questions = status.get("questions") or []
+        if questions:
+            question_lines = []
+            for question in questions[:3]:
+                text = str(question or "").strip()
+                if text:
+                    question_lines.append(f"- {text}")
+            if question_lines:
+                parts.append("为了进一步查询知识库并给出更准确的判断，请补充：\n" + "\n".join(question_lines))
+
+        if not parts:
+            reason = str(status.get("reason") or "").strip()
+            if reason:
+                parts.append(f"还需要补充信息后才能继续判断：{reason}")
+            else:
+                parts.append("还需要补充车型、部件型号或故障现象后，我才能继续判断。")
+        return "\n\n".join(parts)
+
+
+# 单例
+_fix_agent = None
+
+
+def get_fix_agent() -> FixAgent:
+    global _fix_agent
+    if _fix_agent is None:
+        from services.llm.service import get_llm_service
+        _fix_agent = FixAgent(get_llm_service())
+    return _fix_agent

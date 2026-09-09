@@ -1,0 +1,42 @@
+# ===== 通用 =====
+.DS_Store
+*.log
+*.swp
+*.swo
+
+# ===== 前端 (fix-) =====
+node_modules/
+dist/
+.vite-dev.*
+cookies.txt
+
+# ===== Python 端 (FixAgent) =====
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+# 运行时缓存与本地产物（图片摘要缓存、PDF 渲染页）
+rag_files/
+# 本地离线诊断工具与其输出，不纳入版本库
+rag_diagnostics/
+
+# ===== CodeGraph 索引（本地生成，不入库） =====
+.codegraph/
+
+# ===== Codex 隔离工作区 =====
+.worktrees/
+
+# ===== Java 端 (weixiu) =====
+target/
+*.iml
+.mvn/wrapper/maven-wrapper.jar
+deploy/
+# 含真实密钥的本地开发配置，不入库（用 application-dev.yml.example 作模板）
+application-dev.yml
+
+# ===== IDE =====
+.idea/
+.vscode/
+cookie.txt
