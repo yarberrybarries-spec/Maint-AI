@@ -13,7 +13,7 @@
 --   * memory_fact 的升级字段已直接纳入建表定义，避免重复 ALTER 报错。
 --   * 补充了代码实际使用但旧脚本遗漏的 memory_idempotent 表。
 --   * 不自动添加外键：现有 Java 代码依赖逻辑关联，贸然加外键可能与历史数据冲突。
---   * 生产环境请先备份；演示账号初始化位于文件末尾，密码为固定 BCrypt 演示哈希。
+--   * 生产环境请先备份；本文件只包含数据库结构，不包含业务数据初始化。
 -- =====================================================================
 
 SET NAMES utf8mb4;
@@ -21,7 +21,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- 自动审核字段与明细表（与 task_auto_review_upgrade.sql 保持一致）
 
-CREATE DATABASE IF NOT EXISTS fix DEFAULT CHARSET = utf8mb4;
+CREATE DATABASE IF NOT EXISTS fix DEFAULT CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci;
 USE fix;
 
 -- =============================================
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     INDEX `idx_number`   (`number`),
     INDEX `idx_username` (`username`),
     INDEX `idx_status`   (`status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '用户表';
 
 
 -- =============================================
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS `ai_session` (
     `summary`     TEXT         DEFAULT NULL COMMENT '旧对话的信息摘要（压缩后保留）',
     `created_at`  DATETIME     NOT NULL COMMENT '创建时间',
     `updated_at`  DATETIME     NOT NULL COMMENT '更新时间'
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI会话表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'AI会话表';
 
 
 -- =============================================
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS `ai_message` (
     INDEX `idx_session_created`      (`ai_session_id`, `created_at`),
     INDEX `idx_session_consolidated` (`ai_session_id`, `consolidated`),
     INDEX `idx_question_message`     (`question_message_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI消息历史表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'AI消息历史表';
 
 -- =============================================
 -- 4. 记忆系统 - 事实记忆表
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS `memory_fact` (
     INDEX `idx_equipment_id`  (`equipment_id`),
     INDEX `idx_device_type`   (`device_type`),
     UNIQUE KEY `uk_memory_fact_user_name` (`user_id`, `name`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '事实记忆表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '事实记忆表';
 
 
 
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS `maintenance_manual` (
     `updated_at`         DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     INDEX `idx_status`     (`status`),
     INDEX `idx_created_at` (`created_at`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '维修手册表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '维修手册表';
 
 
 -- =============================================
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS `knowledge_document` (
     INDEX `idx_manual_id`   (`manual_id`),
     INDEX `idx_document_id` (`document_id`),
     INDEX `idx_status`      (`status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '知识文档版本总账本';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '知识文档版本总账本';
 
 
 -- =============================================
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS `knowledge_document` (
 -- =============================================
 CREATE TABLE IF NOT EXISTS `maintenance_task` (
     `id`                  BIGINT       NOT NULL COMMENT '雪花ID',
-    `task_number`         VARCHAR(30)  NOT NULL COMMENT '任务编号 MT-yyyyMMdd-xxx',
+    `task_number`         VARCHAR(64)  NOT NULL COMMENT '任务编号 MT-yyyyMMdd-xxx',
     `device_id`           VARCHAR(64)  DEFAULT NULL COMMENT '设备ID（Neo4j图谱节点ID）',
     `device_name`         VARCHAR(200) DEFAULT NULL COMMENT '设备名称',
     `fault_description`   TEXT         NOT NULL COMMENT '故障描述',
@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS `maintenance_task` (
     KEY `idx_reporter`   (`reporter_id`),
     KEY `idx_created_at` (`created_at`),
     KEY `idx_task_auto_review_status` (`auto_review_status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '检修任务表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '检修任务表';
 
 CREATE TABLE IF NOT EXISTS `task_auto_review` (
     `id` BIGINT NOT NULL,
@@ -250,7 +250,7 @@ CREATE TABLE IF NOT EXISTS `task_auto_review` (
     PRIMARY KEY (`id`), UNIQUE KEY `uk_task_review_version` (`task_id`, `evidence_version`),
     UNIQUE KEY `uk_task_review_request` (`request_id`), KEY `idx_task_review_status` (`status`),
     KEY `idx_task_review_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务自动审核记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务自动审核记录';
 
 
 -- =============================================
@@ -286,7 +286,7 @@ CREATE TABLE IF NOT EXISTS `task_step_record` (
     PRIMARY KEY (`id`),
     KEY `idx_task_id`    (`task_id`),
     KEY `idx_task_order` (`task_id`, `sort_order`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '任务步骤执行记录表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '任务步骤执行记录表';
 
 CREATE TABLE IF NOT EXISTS `task_step_revision` (
     `id`                    BIGINT       NOT NULL COMMENT '修订请求ID',
@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS `task_step_revision` (
     KEY `idx_step_revision_task` (`task_id`, `created_at`),
     KEY `idx_step_revision_status` (`status`),
     KEY `idx_step_revision_task_status` (`task_id`, `status`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '检修任务步骤局部修订记录';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '检修任务步骤局部修订记录';
 
 
 -- =============================================
@@ -326,7 +326,7 @@ CREATE TABLE IF NOT EXISTS `maintenance_task_focus` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_task_focus_user` (`task_id`, `user_id`),
     KEY `idx_task_focus_step` (`current_step_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '检修任务当前聚焦步骤表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '检修任务当前聚焦步骤表';
 
 
 
@@ -358,7 +358,7 @@ CREATE TABLE IF NOT EXISTS `task_graph_extraction_candidate` (
     UNIQUE KEY `uk_candidate_request_id` (`request_id`),
     KEY `idx_candidate_extraction_status` (`extraction_status`),
     KEY `idx_candidate_review_status` (`review_status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务执行证据抽取候选';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务执行证据抽取候选';
 
 
 CREATE TABLE IF NOT EXISTS `standard_procedure` (
@@ -379,7 +379,7 @@ CREATE TABLE IF NOT EXISTS `standard_procedure` (
     KEY `idx_device_level` (`device_type`, `maintenance_level`),
     KEY `idx_status`       (`status`),
     KEY `idx_created_at`   (`created_at`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '标准作业规程表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '标准作业规程表';
 
 
 -- =============================================
@@ -399,7 +399,7 @@ CREATE TABLE IF NOT EXISTS `procedure_step` (
     `created_at`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_procedure_order` (`procedure_id`, `step_order`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '规程步骤模板表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '规程步骤模板表';
 
 
 -- =============================================
@@ -413,7 +413,7 @@ CREATE TABLE IF NOT EXISTS `manual_read_record` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_manual` (`user_id`, `manual_id`),
     INDEX `idx_user_last_read` (`user_id`, `last_read_at`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '手册阅读记录表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '手册阅读记录表';
 
 
 -- =============================================
@@ -429,7 +429,7 @@ CREATE TABLE IF NOT EXISTS `manual_device` (
     UNIQUE KEY `uk_manual_device` (`manual_id`, `device_id`),
     INDEX `idx_device_id` (`device_id`),
     INDEX `idx_manual_id` (`manual_id`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '手册-设备关联表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '手册-设备关联表';
 
 -- Phase 2: 记忆召回追踪表
 CREATE TABLE IF NOT EXISTS `memory_recall_trace` (
@@ -452,7 +452,7 @@ CREATE TABLE IF NOT EXISTS `memory_recall_trace` (
                                                      INDEX `idx_session_round` (`session_id`, `round_no`),
                                                      INDEX `idx_user_id` (`user_id`),
                                                      INDEX `idx_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记忆召回追踪记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='记忆召回追踪记录';
 
 -- Phase 3: memory_fact 表扩展多因子排序字段
 -- Phase 4: memory_fact 表新增维修业务维度字段
@@ -470,7 +470,7 @@ CREATE TABLE IF NOT EXISTS `memory_reflection` (
                                                    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                                                    INDEX `idx_user_type` (`user_id`, `reflection_type`),
                                                    INDEX `idx_user_status` (`user_id`, `status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户画像反思记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户画像反思记录';
 -- ===== 检修步骤助手：任务级 AI 对话消息 =====
 CREATE TABLE IF NOT EXISTS task_chat_message (
   id BIGINT NOT NULL PRIMARY KEY,
@@ -482,7 +482,7 @@ CREATE TABLE IF NOT EXISTS task_chat_message (
   images JSON,
   created_at DATETIME,
   KEY idx_task (task_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务级AI对话消息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务级AI对话消息';
 -- =============================================
 -- 记忆系统升级 - memory_fact 升级为"单条记忆"模型
 -- 文件式记忆协议（MySQL 存储），纯 additive，非破坏性
@@ -518,7 +518,7 @@ CREATE TABLE IF NOT EXISTS quiz_session (
                                             submitted_at    DATETIME     NULL,
                                             PRIMARY KEY (id),
                                             KEY idx_user (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='出题/练习会话';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='出题/练习会话';
 
 -- 本次会话的题目（答题主体）
 CREATE TABLE IF NOT EXISTS quiz_question (
@@ -540,7 +540,7 @@ CREATE TABLE IF NOT EXISTS quiz_question (
                                              created_at        DATETIME     NOT NULL,
                                              PRIMARY KEY (id),
                                              KEY idx_session (session_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会话题目';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='会话题目';
 
 -- 个人题库
 CREATE TABLE IF NOT EXISTS user_question_bank (
@@ -558,7 +558,7 @@ CREATE TABLE IF NOT EXISTS user_question_bank (
                                                   created_at         DATETIME     NOT NULL,
                                                   PRIMARY KEY (id),
                                                   KEY idx_user_topic (user_id, topic)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='个人题库';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='个人题库';
 
 -- 掌握度档案
 CREATE TABLE IF NOT EXISTS knowledge_mastery (
@@ -571,7 +571,7 @@ CREATE TABLE IF NOT EXISTS knowledge_mastery (
                                                  updated_at       DATETIME     NOT NULL,
                                                  PRIMARY KEY (id),
                                                  UNIQUE KEY uk_user_topic (user_id, topic)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='知识掌握度';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='知识掌握度';
 -- ---------------------------------------------
 -- 漏洞#2：记忆语义去重的每用户进度（门槛用：自 last_dedup_at 起新增事实 > 20 才跑）
 -- ---------------------------------------------
@@ -579,7 +579,7 @@ CREATE TABLE IF NOT EXISTS `memory_dedup_state` (
     `user_id`       BIGINT   NOT NULL COMMENT '用户ID',
     `last_dedup_at` DATETIME NULL     COMMENT '上次语义去重时间',
     PRIMARY KEY (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记忆语义去重进度';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='记忆语义去重进度';
 
 -- =============================================
 -- 记忆消息幂等处理表（代码 MemoryIdempotentMapper 使用）
@@ -592,7 +592,7 @@ CREATE TABLE IF NOT EXISTS `memory_idempotent` (
     PRIMARY KEY (`message_id`),
     KEY `idx_memory_idempotent_created` (`created_at`),
     KEY `idx_memory_idempotent_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='记忆消息幂等处理表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='记忆消息幂等处理表';
 
 -- =============================================
 -- 知识过期判定待审表
@@ -620,7 +620,7 @@ CREATE TABLE IF NOT EXISTS `expiration_review` (
     `updated_at`            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX `idx_review_status` (`review_status`),
     UNIQUE KEY `uk_expiration_review_dedup` (`dedup_key`)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '知识过期判定待审表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '知识过期判定待审表';
 -- =============================================
 -- 语音检修协作
 -- =============================================
@@ -644,7 +644,7 @@ CREATE TABLE IF NOT EXISTS `maintenance_voice_event` (
     PRIMARY KEY (`id`),
     KEY `idx_voice_event_task_time` (`task_id`, `created_at`),
     KEY `idx_voice_event_task_step` (`task_id`, `target_step_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务语音事件';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务语音事件';
 
 CREATE TABLE IF NOT EXISTS `operation_log` (
     `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
@@ -657,7 +657,7 @@ CREATE TABLE IF NOT EXISTS `operation_log` (
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
     PRIMARY KEY (`id`),
     KEY `idx_op_log_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作流水日志表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='操作流水日志表';
 -- Hybrid diagnostic domain rules (merged from answer_feedback_upgrade.sql).
 
 CREATE TABLE IF NOT EXISTS `domain_rule` (
@@ -687,7 +687,7 @@ CREATE TABLE IF NOT EXISTS `domain_rule` (
                                              KEY `idx_domain_rule_sync_status` (`sync_status`),
                                              KEY `idx_domain_rule_device_type` (`device_type`),
                                              KEY `idx_domain_rule_created_at` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='domain diagnostic rule';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='domain diagnostic rule';
 
 CREATE TABLE IF NOT EXISTS `answer_feedback` (
     `id`                   BIGINT       NOT NULL COMMENT 'snowflake id',
@@ -715,29 +715,6 @@ CREATE TABLE IF NOT EXISTS `answer_feedback` (
     KEY `idx_answer_feedback_user` (`user_id`),
     KEY `idx_answer_feedback_device` (`device_type`),
     KEY `idx_answer_feedback_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI answer correction feedback';
-
--- =============================================
--- 演示初始化账号
--- 密码均为123456，数据库保存BCrypt(4)哈希，不保存明文密码。
--- type: 1=管理员，0=普通用户；status: 1=已激活
--- 可重复执行：若用户名已存在，则更新为本演示账号配置。
--- =============================================
-INSERT INTO `user`
-    (`username`, `name`, `number`, `password`, `gender`, `type`, `phone`, `email`, `hire_date`, `status`)
-VALUES
-    ('3', '管理员3', 'ADMIN0003', '$2a$04$oFyOSL53vtwxJFddR99GeOw2ze/mOZ6ftQwqFm8yBfUGqH/Rm0VXu', 0, 1, '13800000003', NULL, CURRENT_DATE, 1),
-    ('4', '普通用户4', 'USER0004', '$2a$04$oFyOSL53vtwxJFddR99GeOw2ze/mOZ6ftQwqFm8yBfUGqH/Rm0VXu', 0, 0, '13800000004', NULL, CURRENT_DATE, 1)
-ON DUPLICATE KEY UPDATE
-    `name` = VALUES(`name`),
-    `password` = VALUES(`password`),
-    `gender` = VALUES(`gender`),
-    `type` = VALUES(`type`),
-    `phone` = VALUES(`phone`),
-    `email` = VALUES(`email`),
-    `hire_date` = VALUES(`hire_date`),
-    `status` = VALUES(`status`),
-    `update_time` = CURRENT_TIMESTAMP;
-
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI answer correction feedback';
 
 SET FOREIGN_KEY_CHECKS = 1;

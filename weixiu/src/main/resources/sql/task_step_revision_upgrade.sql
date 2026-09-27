@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS `task_step_revision` (
     KEY `idx_step_revision_task` (`task_id`, `created_at`),
     KEY `idx_step_revision_status` (`status`),
     KEY `idx_step_revision_task_status` (`task_id`, `status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务步骤局部修订记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务步骤局部修订记录';
 
 -- 兼容已经执行过旧版建表语句的数据库：CREATE TABLE IF NOT EXISTS 不会补索引。
 SET @revision_task_status_index_ddl = IF(

@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS `answer_feedback` (
     KEY `idx_answer_feedback_user` (`user_id`),
     KEY `idx_answer_feedback_device` (`device_type`),
     KEY `idx_answer_feedback_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI answer correction feedback';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='AI answer correction feedback';
 
 SET @feedback_question_message_id_exists = (
     SELECT COUNT(*)

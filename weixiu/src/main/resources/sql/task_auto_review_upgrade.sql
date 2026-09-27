@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS `task_auto_review` (
     UNIQUE KEY `uk_task_review_request` (`request_id`),
     KEY `idx_task_review_status` (`status`),
     KEY `idx_task_review_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务自动审核记录';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='检修任务自动审核记录';
 
 -- 管理端按自动审核状态筛选任务，给已有库补查询索引。
 SET @task_auto_review_status_index_ddl = IF(
