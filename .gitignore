@@ -22,6 +22,9 @@ rag_files/
 # 本地离线诊断工具与其输出，不纳入版本库
 rag_diagnostics/
 
+# 本地生成图片与其他运行产物，不纳入版本库
+output/
+
 # ===== CodeGraph 索引（本地生成，不入库） =====
 .codegraph/
 
