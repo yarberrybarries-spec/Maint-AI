@@ -34,6 +34,12 @@ public class MaintenanceTaskVO {
     private Long currentStepId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String autoReviewStatus;
+    private String autoReviewEvidenceStatus;
+    private Integer autoReviewScore;
+    private Integer autoReviewEvidenceScore;
+    private String autoReviewReason;
+    private LocalDateTime autoReviewUpdatedAt;
 
 
     /** 旧图谱线索仅保留兼容字段，不在任务 VO 暴露 */

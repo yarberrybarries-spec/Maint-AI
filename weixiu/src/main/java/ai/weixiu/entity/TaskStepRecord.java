@@ -91,4 +91,10 @@ public class TaskStepRecord implements Serializable {
 
     /** AI验证理由 */
     private String aiReason;
+
+    /** 最近一次步骤修订提示 */
+    private String revisionState;
+    private String revisionNotice;
+    private Long lastRevisionId;
+    private LocalDateTime lastRevisionAt;
 }

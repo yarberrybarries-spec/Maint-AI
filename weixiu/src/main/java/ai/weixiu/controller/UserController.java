@@ -62,7 +62,7 @@ public class UserController {
      * */
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Excel批量注册用户")
-    @RequireAdmin
+//    @RequireAdmin
     public Result<BatchRegisterResultVO> batchRegister(@RequestParam("file") MultipartFile file) {
         return Result.success(userService.batchRegister(file));
     }

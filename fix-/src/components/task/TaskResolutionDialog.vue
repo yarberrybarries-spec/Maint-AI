@@ -2,6 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { confirmTaskResolution } from '@/api/maintenanceTask'
+import { notifyStore } from '@/stores/notifyStore'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -39,6 +40,12 @@ async function submit() {
       finalFaultCause: form.finalFaultCause.trim() || null,
       effectiveMeasure: form.effectiveMeasure.trim() || null,
       completionSummary: form.completionSummary.trim() || null,
+    })
+    notifyStore.trackJob({
+      key: 'review:' + props.taskId,
+      kind: 'review',
+      refId: props.taskId,
+      title: 'AI审核：检修结果',
     })
     ElMessage.success('任务结果已保存')
     emit('submitted')

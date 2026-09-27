@@ -32,10 +32,18 @@ public class RabbitMQConfig {
     public static final String TASK_GENERATE_KEY = "task.generate";
     public static final String TASK_GENERATE_RESULT_QUEUE = "task.generate.result.queue";
     public static final String TASK_GENERATE_RESULT_KEY = "task.generate.result";
+    public static final String TASK_STEP_REVISION_QUEUE = "task.step.revision.queue";
+    public static final String TASK_STEP_REVISION_KEY = "task.step.revision";
+    public static final String TASK_STEP_REVISION_RESULT_QUEUE = "task.step.revision.result.queue";
+    public static final String TASK_STEP_REVISION_RESULT_KEY = "task.step.revision.result";
     public static final String TASK_EVIDENCE_EXTRACT_QUEUE = "task.evidence.extract.queue";
     public static final String TASK_EVIDENCE_EXTRACT_KEY = "task.evidence.extract";
     public static final String TASK_EVIDENCE_EXTRACT_RESULT_QUEUE = "task.evidence.extract.result.queue";
     public static final String TASK_EVIDENCE_EXTRACT_RESULT_KEY = "task.evidence.extract.result";
+    public static final String TASK_AUTO_REVIEW_QUEUE = "task.auto.review.queue";
+    public static final String TASK_AUTO_REVIEW_KEY = "task.auto.review";
+    public static final String TASK_AUTO_REVIEW_RESULT_QUEUE = "task.auto.review.result.queue";
+    public static final String TASK_AUTO_REVIEW_RESULT_KEY = "task.auto.review.result";
 
     // ===== 步骤AI验证队列 =====
     public static final String TASK_STEP_VERIFY_QUEUE = "task.step.verify.queue";
@@ -215,6 +223,28 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(taskGenerateResultQueue()).to(taskExchange()).with(TASK_GENERATE_RESULT_KEY);
     }
 
+    @Bean
+    public Queue taskStepRevisionQueue() {
+        return QueueBuilder.durable(TASK_STEP_REVISION_QUEUE)
+                .withArgument("x-message-ttl", 900_000)
+                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE).build();
+    }
+
+    @Bean
+    public Binding taskStepRevisionBinding() {
+        return BindingBuilder.bind(taskStepRevisionQueue()).to(taskExchange()).with(TASK_STEP_REVISION_KEY);
+    }
+
+    @Bean
+    public Queue taskStepRevisionResultQueue() {
+        return QueueBuilder.durable(TASK_STEP_REVISION_RESULT_QUEUE).build();
+    }
+
+    @Bean
+    public Binding taskStepRevisionResultBinding() {
+        return BindingBuilder.bind(taskStepRevisionResultQueue()).to(taskExchange()).with(TASK_STEP_REVISION_RESULT_KEY);
+    }
+
     /** 最终执行证据抽取请求队列（TTL 10min） */
     @Bean
     public Queue taskEvidenceExtractQueue() {
@@ -236,6 +266,28 @@ public class RabbitMQConfig {
     @Bean
     public Binding taskEvidenceExtractResultBinding() {
         return BindingBuilder.bind(taskEvidenceExtractResultQueue()).to(taskExchange()).with(TASK_EVIDENCE_EXTRACT_RESULT_KEY);
+    }
+
+    @Bean
+    public Queue taskAutoReviewQueue() {
+        return QueueBuilder.durable(TASK_AUTO_REVIEW_QUEUE)
+                .withArgument("x-message-ttl", 600_000)
+                .withArgument("x-dead-letter-exchange", DLX_EXCHANGE).build();
+    }
+
+    @Bean
+    public Binding taskAutoReviewBinding() {
+        return BindingBuilder.bind(taskAutoReviewQueue()).to(taskExchange()).with(TASK_AUTO_REVIEW_KEY);
+    }
+
+    @Bean
+    public Queue taskAutoReviewResultQueue() {
+        return QueueBuilder.durable(TASK_AUTO_REVIEW_RESULT_QUEUE).build();
+    }
+
+    @Bean
+    public Binding taskAutoReviewResultBinding() {
+        return BindingBuilder.bind(taskAutoReviewResultQueue()).to(taskExchange()).with(TASK_AUTO_REVIEW_RESULT_KEY);
     }
 
     // ===== Step Verify Exchange & Queues =====

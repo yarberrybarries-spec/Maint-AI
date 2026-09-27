@@ -11,16 +11,19 @@ import {
   DataAnalysis,
   Document,
   Headset,
+  Microphone,
   Refresh,
   Tickets,
+  VideoPause,
   Warning,
 } from '@element-plus/icons-vue'
-import { getTaskDetail, startTask, retryGenerate, updateTaskFocus } from '@/api/maintenanceTask'
+import { getTaskDetail, startTask, retryGenerate, updateTaskFocus, createStepRevision, getStepRevision, confirmStepRevision, cancelStepRevision } from '@/api/maintenanceTask'
 import { draftFromTask, getMyCases } from '@/api/caseRecord'
 import { notifyStore } from '@/stores/notifyStore'
 import { taskAssistantStore } from '@/stores/taskAssistantStore'
 import { taskStatus, urgency, levelLabel, stepActionable } from '@/constants/taskStatus'
 import { useStepReadAlong } from '@/composables/useStepReadAlong'
+import { useAsrStream } from '@/composables/useAsrStream'
 import TaskStepCard from '@/components/task/TaskStepCard.vue'
 import TaskAssistantPanel from '@/components/task/TaskAssistantPanel.vue'
 import TaskVoiceModePanel from '@/components/task/TaskVoiceModePanel.vue'
@@ -43,6 +46,12 @@ const caseDraft = ref(null)
 const myCasesDrawer = ref(false)
 const myCasesLoading = ref(false)
 const myCases = ref([])
+const revisionDialog = ref(false)
+const revisionText = ref('')
+const revisionBusy = ref(false)
+const revision = ref(null)
+let revisionPollTimer = null
+const revisionAsr = useAsrStream()
 
 let motionContext = null
 
@@ -73,6 +82,10 @@ const resolutionLabel = computed(() => ({
 const extractionLabel = computed(() => ({
   PENDING: '候选整理中', READY: '候选已整理，待管理员审核', FAILED: '候选整理失败，后台可重试',
 }[task.value?.extractionStatus] || task.value?.extractionStatus || '未开始'))
+const autoReviewLabel = computed(() => ({
+  PENDING: '等待自动审核', PROCESSING: 'AI正在审核', AUTO_ARCHIVED: '已自动归档',
+  MANUAL_REVIEW: '等待管理员审核', MANUAL_APPROVED: '管理员已通过', MANUAL_REJECTED: '管理员已驳回',
+}[task.value?.autoReviewStatus] || '尚未触发'))
 
 // —— 分步推进看板：节点状态 ——
 const flowNodes = computed(() =>
@@ -184,6 +197,87 @@ async function onRetry() {
   finally { acting.value = false }
 }
 
+function openRevisionDialog() {
+  revisionText.value = ''
+  revision.value = null
+  revisionDialog.value = true
+}
+
+async function toggleRevisionVoice() {
+  if (revisionAsr.recording.value) { revisionAsr.stop(); return }
+  try {
+    await revisionAsr.start({
+      onFinal: (text) => { revisionText.value = revisionText.value ? `${revisionText.value}${text}` : text },
+    })
+  } catch (err) { ElMessage.error(err.message || '无法开始语音输入') }
+}
+
+async function submitRevision() {
+  if (!revisionText.value.trim()) { ElMessage.warning('请描述需要修改的步骤和原因'); return }
+  revisionBusy.value = true
+  try {
+    const res = await createStepRevision(taskId, revisionText.value.trim())
+    revision.value = res?.data || null
+    if (!revision.value?.id) throw new Error('未返回修订请求编号')
+    notifyStore.trackStepRevision(taskId, revision.value.id, '步骤修改：正在分析')
+    pollRevision(revision.value.id)
+  } catch (err) { ElMessage.error(err.message || '提交步骤修改失败') }
+  finally { revisionBusy.value = false }
+}
+
+async function pollRevision(id) {
+  if (revisionPollTimer) clearTimeout(revisionPollTimer)
+  try {
+    const res = await getStepRevision(taskId, id)
+    revision.value = res?.data || revision.value
+    if (revision.value?.status === 'ANALYZING') revisionPollTimer = setTimeout(() => pollRevision(id), 2500)
+  } catch (err) { ElMessage.error(err.message || '读取步骤修改预览失败') }
+}
+
+async function applyRevision() {
+  if (!revision.value?.id) return
+  revisionBusy.value = true
+  try {
+    const res = await confirmStepRevision(taskId, revision.value.id)
+    revision.value = res?.data || revision.value
+    ElMessage.success('任务步骤已更新')
+    revisionDialog.value = false
+    await load()
+    notifyStore.reconcile()
+  } catch (err) { ElMessage.error(err.message || '应用步骤修改失败') }
+  finally { revisionBusy.value = false }
+}
+
+async function closeRevision() {
+  revisionAsr.cleanup()
+  if (revision.value?.id && revision.value?.status === 'PREVIEW_READY') {
+    try { await cancelStepRevision(taskId, revision.value.id) } catch {}
+  }
+  revisionDialog.value = false
+}
+
+async function onRevisionTray(event) {
+  const detail = event?.detail || {}
+  if (String(detail.taskId) !== String(taskId)) return
+  revisionDialog.value = true
+  if (detail.revisionId) await pollRevision(detail.revisionId)
+}
+
+function revisionItems() {
+  const raw = revision.value?.agentResult
+  return Array.isArray(raw?.items) ? raw.items : []
+}
+
+function revisionActionLabel(action) {
+  return ({
+    MANUAL_LOCKED: '步骤来源手册，无法修改',
+    MANUAL_CORRECTED: '按手册纠正',
+    FIELD_REGENERATED: '根据现场描述修改',
+    COMPLETED_SKIPPED: '已完成，未修改',
+    REMOVE_EXTRA: '删除多余步骤',
+  })[action] || action
+}
+
 // 点步骤卡「答疑」→ 助手聚焦到该步并聚焦输入框（同一条对话，不再弹抽屉）
 async function onChat(step) {
   await focusStep(step.id)
@@ -286,14 +380,22 @@ watch(() => notifyStore.state.notifications.length, () => load())
 watch(showWork, (v) => { if (v) setupMotion() })
 
 onMounted(async () => {
+  window.addEventListener('step-revision-preview', onRevisionTray)
   await load()
   await setupMotion()
+  if (route.query.revisionId) {
+    revisionDialog.value = true
+    await pollRevision(route.query.revisionId)
+  }
 })
 
 onUnmounted(() => {
+  window.removeEventListener('step-revision-preview', onRevisionTray)
   motionContext?.revert()
   readAlong.exit() // 离开页面时停掉正在播放的跟读语音
   if (verifyPollTimer) clearTimeout(verifyPollTimer)
+  if (revisionPollTimer) clearTimeout(revisionPollTimer)
+  revisionAsr.cleanup()
 })
 </script>
 
@@ -405,6 +507,10 @@ onUnmounted(() => {
           <div v-if="task.completionSummary"><dt>完成摘要</dt><dd>{{ task.completionSummary }}</dd></div>
         </dl>
         <p class="extraction-note">候选整理状态：{{ extractionLabel }}。候选内容需管理员审核后才可能沉淀，不称为已入图。<span v-if="task.extractionStatus === 'FAILED'">本次任务结果已保存，后台可以重试整理。</span></p>
+        <p class="extraction-note auto-review-note">
+          自动审批：{{ autoReviewLabel }}<template v-if="task.autoReviewScore != null">（综合 {{ task.autoReviewScore }} 分，证据 {{ task.autoReviewEvidenceScore ?? '-' }} 分）</template>
+          <span v-if="task.autoReviewReason">{{ task.autoReviewReason }}</span>
+        </p>
       </section>
 
       <!-- 执行中 / 待确认 / 已完成 -->
@@ -416,6 +522,9 @@ onUnmounted(() => {
               <span class="flow-kicker">检修流程 · WORKFLOW</span>
               <h3>分步推进看板</h3>
             </div>
+            <button v-if="['GENERATED', 'EXECUTING'].includes(task.status)" type="button" class="ra-start" @click="openRevisionDialog">
+              <el-icon><Refresh /></el-icon> 修改步骤
+            </button>
           </header>
           <div class="flow-rail">
             <button
@@ -527,6 +636,40 @@ onUnmounted(() => {
       :draft="caseDraft"
       @submitted="loadMyCases"
     />
+
+    <el-dialog v-model="revisionDialog" title="修改检修步骤" width="680px" append-to-body :close-on-click-modal="false" @close="closeRevision">
+      <template v-if="!revision || ['FAILED', 'EXPIRED', 'CANCELLED'].includes(revision.status)">
+        <p class="dialog-lead">请用自然语言说明修改范围和原因，例如“第 6 步拆卸顺序不对”或“后 3 步与现场设备不符”。</p>
+        <div class="revision-input-tools">
+          <span v-if="revisionAsr.recording.value">{{ revisionAsr.partial.value || '正在聆听…' }}</span>
+          <el-button text :type="revisionAsr.recording.value ? 'danger' : 'primary'" @click="toggleRevisionVoice">
+            <el-icon><VideoPause v-if="revisionAsr.recording.value" /><Microphone v-else /></el-icon>
+            {{ revisionAsr.recording.value ? '停止录音' : '语音转文字' }}
+          </el-button>
+        </div>
+        <el-input v-model="revisionText" type="textarea" :rows="4" maxlength="1000" show-word-limit placeholder="输入或粘贴语音转写内容" />
+        <p v-if="revision?.errorMessage" class="revision-error">{{ revision.errorMessage }}</p>
+      </template>
+      <div v-else-if="revision.status === 'ANALYZING'" class="revision-loading">
+        <span class="state-spinner" />
+        <b>正在识别修改范围并匹配维修手册…</b>
+        <small>完成后右下角也会提示，可暂时关闭弹窗。</small>
+      </div>
+      <template v-else-if="revision.status === 'PREVIEW_READY'">
+        <p v-if="revision.errorMessage" class="revision-error">{{ revision.errorMessage }}</p>
+        <div v-for="item in revisionItems()" :key="item.stepId" class="revision-item">
+          <header><b>第 {{ item.sortOrder }} 步 · {{ item.title || '保持原标题' }}</b><span>{{ revisionActionLabel(item.action) }}</span></header>
+          <p>{{ item.reason || '已完成手册匹配' }}</p>
+          <div v-if="item.content" class="revision-new"><strong>修改后</strong>{{ item.content }}</div>
+          <small v-if="item.risk">提示：{{ item.risk }}</small>
+        </div>
+      </template>
+      <template #footer>
+        <el-button :disabled="revisionBusy" @click="closeRevision">取消</el-button>
+        <el-button v-if="!revision || ['FAILED', 'EXPIRED', 'CANCELLED'].includes(revision.status)" type="primary" :loading="revisionBusy" @click="submitRevision">生成修改预览</el-button>
+        <el-button v-else-if="revision.status === 'PREVIEW_READY' && !revision.errorMessage" type="primary" :loading="revisionBusy" @click="applyRevision">确认修改</el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="myCasesDrawer" title="我的案例" size="460px">
       <div v-loading="myCasesLoading" class="my-case-list">
@@ -749,6 +892,17 @@ onUnmounted(() => {
 .fn-dot::after { content: ''; position: absolute; left: 100%; top: 50%; width: 6px; height: 2px; background: var(--plaza-border-strong); transform: translateY(-50%); }
 .flow-node:last-child .fn-dot::after { display: none; }
 .fn-label { font-size: 11px; line-height: 1.3; color: var(--plaza-text-muted); max-width: 88px; max-height: 28px; overflow: hidden; text-align: center; transition: color .25s ease; }
+.dialog-lead { margin: 0 0 14px; color: var(--plaza-text-muted); font-size: 13px; line-height: 1.65; }
+.revision-loading { display: grid; min-height: 180px; place-items: center; align-content: center; gap: 10px; color: var(--plaza-text); }
+.revision-loading small { color: var(--plaza-text-muted); }
+.revision-item { margin-bottom: 10px; padding: 12px; border: 1px solid var(--plaza-border); border-radius: 10px; background: var(--plaza-bg-input); }
+.revision-item header { display: flex; justify-content: space-between; gap: 12px; color: var(--plaza-heading); }
+.revision-item header span { color: var(--plaza-accent); font-size: 11px; }
+.revision-item p, .revision-item small { color: var(--plaza-text-muted); line-height: 1.55; }
+.revision-new { margin: 8px 0; padding: 9px; border-radius: 8px; background: var(--plaza-bg-card); color: var(--plaza-text); line-height: 1.65; white-space: pre-wrap; }
+.revision-new strong { display: block; margin-bottom: 4px; color: var(--plaza-accent); }
+.revision-error { color: var(--plaza-danger, #c5402c); }
+.revision-input-tools { display: flex; min-height: 34px; align-items: center; justify-content: flex-end; gap: 10px; color: var(--plaza-accent); font-size: 12px; }
 .flow-node.done .fn-dot { background: #5e8c3e; border-color: #5e8c3e; color: #fff; }
 .flow-node.done .fn-dot::after { background: #5e8c3e; }
 .flow-node.active .fn-dot { background: var(--plaza-accent-grad); border-color: transparent; color: #fff; box-shadow: 0 0 0 4px var(--plaza-accent-soft); animation: nodePulse 1.8s ease-in-out infinite; }

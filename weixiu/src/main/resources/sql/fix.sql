@@ -173,12 +173,33 @@ CREATE TABLE IF NOT EXISTS `maintenance_task` (
     `voice_summary`       TEXT         NULL COMMENT '语音检修AI对话压缩摘要',
     `created_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at`          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `auto_review_status` VARCHAR(24) NULL COMMENT '自动审核状态',
+    `auto_review_evidence_status` VARCHAR(20) NULL COMMENT '证据状态',
+    `auto_review_score` INT NULL COMMENT '自动审核综合分',
+    `auto_review_evidence_score` INT NULL COMMENT '证据完整度分',
+    `auto_review_reason` TEXT NULL COMMENT '自动审核说明',
+    `auto_review_updated_at` DATETIME NULL COMMENT '自动审核更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_task_number` (`task_number`),
     KEY `idx_status`     (`status`),
     KEY `idx_reporter`   (`reporter_id`),
-    KEY `idx_created_at` (`created_at`)
+    KEY `idx_created_at` (`created_at`),
+    KEY `idx_task_auto_review_status` (`auto_review_status`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '检修任务表';
+
+CREATE TABLE IF NOT EXISTS `task_auto_review` (
+    `id` BIGINT NOT NULL, `task_id` BIGINT NOT NULL, `evidence_version` INT NOT NULL,
+    `request_id` VARCHAR(128) NOT NULL, `status` VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    `evidence_status` VARCHAR(20) NULL, `evidence_score` INT NULL, `total_score` INT NULL,
+    `dimension_scores` JSON NULL, `agent_result` JSON NULL, `decision_reasons` JSON NULL,
+    `rule_version` VARCHAR(64) NOT NULL, `model_name` VARCHAR(128) NULL, `model_request_id` VARCHAR(128) NULL,
+    `error_message` TEXT NULL, `reviewed_by` BIGINT NULL, `review_comment` TEXT NULL, `reviewed_at` DATETIME NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`), UNIQUE KEY `uk_task_review_version` (`task_id`, `evidence_version`),
+    UNIQUE KEY `uk_task_review_request` (`request_id`), KEY `idx_task_review_status` (`status`),
+    KEY `idx_task_review_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='检修任务自动审核记录';
 
 
 -- =============================================
@@ -206,11 +227,38 @@ CREATE TABLE IF NOT EXISTS `task_step_record` (
     `ai_pass`               TINYINT(1)   DEFAULT NULL COMMENT 'AI验证是否通过: null=未验证, 0=未通过, 1=通过',
     `ai_confidence`         DECIMAL(4,3) DEFAULT NULL COMMENT 'AI验证置信度(0~1): >=0.85自动完成, 0.5~0.85基本合格, <0.5未通过',
     `ai_reason`             TEXT         DEFAULT NULL COMMENT 'AI验证理由（反馈给工人）',
+    `revision_state`        VARCHAR(32)  NOT NULL DEFAULT 'NONE' COMMENT '最近修订状态',
+    `revision_notice`       VARCHAR(255) DEFAULT NULL COMMENT '最近修订提示',
+    `last_revision_id`      BIGINT       DEFAULT NULL COMMENT '最近修订请求ID',
+    `last_revision_at`      DATETIME     DEFAULT NULL COMMENT '最近修订时间',
     `created_at`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_task_id`    (`task_id`),
     KEY `idx_task_order` (`task_id`, `sort_order`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '任务步骤执行记录表';
+
+CREATE TABLE IF NOT EXISTS `task_step_revision` (
+    `id`                    BIGINT       NOT NULL COMMENT '修订请求ID',
+    `task_id`               BIGINT       NOT NULL COMMENT '任务ID',
+    `requester_id`          BIGINT       NOT NULL COMMENT '发起人ID',
+    `status`                VARCHAR(24)  NOT NULL DEFAULT 'ANALYZING' COMMENT 'ANALYZING/PREVIEW_READY/APPLYING/APPLIED/CANCELLED/EXPIRED/FAILED',
+    `request_text`          TEXT         NOT NULL COMMENT '员工修改描述',
+    `recognized_scope`      JSON         DEFAULT NULL COMMENT 'AI识别的范围',
+    `agent_result`          JSON         DEFAULT NULL COMMENT 'Agent原始预览',
+    `before_snapshot`       JSON         DEFAULT NULL COMMENT '应用前步骤快照',
+    `after_snapshot`        JSON         DEFAULT NULL COMMENT '应用后步骤快照',
+    `result_summary`        TEXT         DEFAULT NULL COMMENT '结果摘要',
+    `error_message`         TEXT         DEFAULT NULL COMMENT '失败或澄清信息',
+    `expires_at`            DATETIME     DEFAULT NULL COMMENT '预览过期时间',
+    `confirmed_at`          DATETIME     DEFAULT NULL COMMENT '确认时间',
+    `applied_at`            DATETIME     DEFAULT NULL COMMENT '应用时间',
+    `created_at`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`            DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_step_revision_task` (`task_id`, `created_at`),
+    KEY `idx_step_revision_status` (`status`),
+    KEY `idx_step_revision_task_status` (`task_id`, `status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '检修任务步骤局部修订记录';
 
 
 -- =============================================

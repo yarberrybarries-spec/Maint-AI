@@ -16,4 +16,6 @@ public class MaintenanceTaskQuery extends PageQuery {
     private String promotedProcedure;
     /** 按图谱沉淀状态过滤: PENDING / PROMOTED / SKIPPED */
     private String promotedGraph;
+    /** 自动审核状态：PENDING/PROCESSING/AUTO_ARCHIVED/MANUAL_REVIEW/FAILED */
+    private String autoReviewStatus;
 }

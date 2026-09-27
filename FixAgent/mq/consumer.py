@@ -21,8 +21,10 @@ from pydantic import ValidationError
 from mq.connection import get_connection
 from config.settings import get_settings
 from schemas.task_evidence_extraction import TaskEvidenceExtractionRequest
+from schemas.task_auto_review import TaskAutoReviewRequest
 
 from services.task_evidence_extraction import get_task_evidence_extraction_service
+from services.task_auto_review import get_task_auto_review_service
 
 logger = logging.getLogger(__name__)
 # ===== 记忆系统队列 =====
@@ -43,9 +45,15 @@ TASK_EXCHANGE = "task.exchange"
 TASK_GENERATE_QUEUE = "task.generate.queue"
 TASK_GENERATE_RESULT_KEY = "task.generate.result"
 TASK_GENERATE_RESULT_QUEUE = "task.generate.result.queue"
+TASK_STEP_REVISION_QUEUE = "task.step.revision.queue"
+TASK_STEP_REVISION_RESULT_KEY = "task.step.revision.result"
+TASK_STEP_REVISION_RESULT_QUEUE = "task.step.revision.result.queue"
 TASK_EVIDENCE_EXTRACT_QUEUE = "task.evidence.extract.queue"
 TASK_EVIDENCE_EXTRACT_RESULT_KEY = "task.evidence.extract.result"
 TASK_EVIDENCE_EXTRACT_RESULT_QUEUE = "task.evidence.extract.result.queue"
+TASK_AUTO_REVIEW_QUEUE = "task.auto.review.queue"
+TASK_AUTO_REVIEW_RESULT_KEY = "task.auto.review.result"
+TASK_AUTO_REVIEW_RESULT_QUEUE = "task.auto.review.result.queue"
 
 # ===== 画像出题队列 =====
 QUIZ_GENERATE_QUEUE = "quiz.generate.queue"
@@ -330,6 +338,35 @@ async def handle_task_generate(message: aio_pika.abc.AbstractIncomingMessage, ch
             }, exchange_name=TASK_EXCHANGE, routing_key=TASK_GENERATE_RESULT_KEY)
 
 
+async def handle_task_step_revision(message: aio_pika.abc.AbstractIncomingMessage, channel: aio_pika.abc.AbstractChannel):
+    """消费局部步骤修订请求，返回不可直接落库的预览。"""
+    async with message.process(requeue=False):
+        body = json.loads(message.body)
+        revision_id = body.get("revisionId")
+        try:
+            from agents.maintenance_agent import get_maintenance_agent
+            result = await get_maintenance_agent().revise_steps(
+                fault_description=body.get("faultDescription", ""),
+                device_id=body.get("deviceId"),
+                device_name=body.get("deviceName"),
+                request_text=body.get("requestText", ""),
+                steps=body.get("steps") or [],
+            )
+            await publish_result(channel, {
+                "revisionId": revision_id,
+                "taskId": body.get("taskId"),
+                **result,
+            }, exchange_name=TASK_EXCHANGE, routing_key=TASK_STEP_REVISION_RESULT_KEY)
+        except Exception as e:
+            logger.error("[MQ消费] 步骤修订异常 revisionId=%s", revision_id, exc_info=True)
+            await publish_result(channel, {
+                "revisionId": revision_id,
+                "taskId": body.get("taskId"),
+                "success": False,
+                "error": str(e),
+            }, exchange_name=TASK_EXCHANGE, routing_key=TASK_STEP_REVISION_RESULT_KEY)
+
+
 async def handle_task_evidence_extract(message: aio_pika.abc.AbstractIncomingMessage, channel):
     """消费最终任务快照，仅抽取待审核候选。"""
     # ACK only after extraction result publish returns successfully.  A broker/
@@ -352,6 +389,18 @@ async def handle_task_evidence_extract(message: aio_pika.abc.AbstractIncomingMes
                 "error": str(exc), "retryable": False,
             }
         await publish_result(channel, payload, exchange_name=TASK_EXCHANGE, routing_key=TASK_EVIDENCE_EXTRACT_RESULT_KEY)
+
+async def handle_task_auto_review(message: aio_pika.abc.AbstractIncomingMessage, channel):
+    async with message.process(requeue=True):
+        body = None
+        try:
+            body = json.loads(message.body)
+            request = TaskAutoReviewRequest.model_validate(body)
+            payload = await get_task_auto_review_service().review(request.snapshot, request.request_id, request.task_id, request.evidence_version)
+        except Exception as exc:
+            identity = body if isinstance(body, Mapping) else {}
+            payload = {"success": False, "requestId": identity.get("requestId"), "taskId": identity.get("taskId"), "evidenceVersion": identity.get("evidenceVersion"), "error": str(exc), "semanticFacts": {}}
+        await publish_result(channel, payload, exchange_name=TASK_EXCHANGE, routing_key=TASK_AUTO_REVIEW_RESULT_KEY)
 
 
 def _task_generate_message(result):
@@ -577,11 +626,23 @@ async def _declare_topology(channel: aio_pika.abc.AbstractChannel):
     )
     await task_generate_result_q.bind(task_exchange, "task.generate.result")
 
+    revision_q = await channel.declare_queue(
+        TASK_STEP_REVISION_QUEUE, durable=True,
+        arguments={"x-message-ttl": 900_000, "x-dead-letter-exchange": "memory.dlx"},
+    )
+    await revision_q.bind(task_exchange, "task.step.revision")
+    revision_result_q = await channel.declare_queue(TASK_STEP_REVISION_RESULT_QUEUE, durable=True)
+    await revision_result_q.bind(task_exchange, TASK_STEP_REVISION_RESULT_KEY)
+
     # ===== 任务最终证据抽取拓扑 =====
     evidence_q = await channel.declare_queue(TASK_EVIDENCE_EXTRACT_QUEUE, durable=True, arguments={"x-message-ttl": 600000, "x-dead-letter-exchange": "memory.dlx"})
     await evidence_q.bind(task_exchange, "task.evidence.extract")
     evidence_result_q = await channel.declare_queue(TASK_EVIDENCE_EXTRACT_RESULT_QUEUE, durable=True)
     await evidence_result_q.bind(task_exchange, TASK_EVIDENCE_EXTRACT_RESULT_KEY)
+    auto_review_q = await channel.declare_queue(TASK_AUTO_REVIEW_QUEUE, durable=True, arguments={"x-message-ttl": 600000, "x-dead-letter-exchange": "memory.dlx"})
+    await auto_review_q.bind(task_exchange, "task.auto.review")
+    auto_review_result_q = await channel.declare_queue(TASK_AUTO_REVIEW_RESULT_QUEUE, durable=True)
+    await auto_review_result_q.bind(task_exchange, TASK_AUTO_REVIEW_RESULT_KEY)
 
     quiz_generate_q = await channel.declare_queue(
         QUIZ_GENERATE_QUEUE, durable=True,
@@ -662,11 +723,21 @@ async def start_consumers():
         lambda msg: handle_task_generate(msg, task_channel)
     )
 
+    revision_channel = await connection.channel()
+    await revision_channel.set_qos(prefetch_count=1)
+    revision_queue = await revision_channel.get_queue(TASK_STEP_REVISION_QUEUE)
+    await revision_queue.consume(lambda msg: handle_task_step_revision(msg, revision_channel))
+
     # 检修任务最终证据抽取通道（独立串行 channel）
     evidence_channel = await connection.channel()
     await evidence_channel.set_qos(prefetch_count=1)
     evidence_queue = await evidence_channel.get_queue(TASK_EVIDENCE_EXTRACT_QUEUE)
     await evidence_queue.consume(lambda msg: handle_task_evidence_extract(msg, evidence_channel))
+
+    auto_review_channel = await connection.channel()
+    await auto_review_channel.set_qos(prefetch_count=1)
+    auto_review_queue = await auto_review_channel.get_queue(TASK_AUTO_REVIEW_QUEUE)
+    await auto_review_queue.consume(lambda msg: handle_task_auto_review(msg, auto_review_channel))
 
     quiz_channel = await connection.channel()
     await quiz_channel.set_qos(prefetch_count=1)

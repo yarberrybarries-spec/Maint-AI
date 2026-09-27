@@ -192,6 +192,232 @@ class MaintenanceAgent(BaseAgent):
             logger.exception("[MaintenanceAgent] 生成步骤异常")
             return {"success": False, "error": str(e)}
 
+    async def revise_steps(
+        self,
+        fault_description: str,
+        device_id: Optional[str],
+        device_name: Optional[str],
+        request_text: str,
+        steps: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """基于员工描述对既有步骤做局部修订预览。
+
+        该方法只生成不可直接落库的草案。Java 端负责状态锁定、快照比对和最终应用。
+        手册证据优先：命中手册且原步骤一致时输出 MANUAL_LOCKED，冲突时输出
+        MANUAL_CORRECTED，没有有效手册依据时才输出 FIELD_REGENERATED。
+        """
+        try:
+            query = f"{fault_description}\n员工步骤修改要求：{request_text}"
+            # 修订是“手册优先”的流程。检索服务异常时必须终止预览，
+            # 不能把服务故障误判成“没有手册覆盖”而自由生成步骤。
+            graph_results, retrieval_results = await self._collect_evidence(
+                query, device_name, None, strict_manual=True
+            )
+            manual_text = []
+            for i, doc in enumerate(retrieval_results or []):
+                if hasattr(doc, "__dict__"):
+                    content = getattr(doc, "content", "") or ""
+                    meta = getattr(doc, "metadata", {}) or {}
+                    doc_id = getattr(doc, "id", "") or ""
+                else:
+                    content = doc.get("content", "") or doc.get("text", "")
+                    meta = doc.get("metadata", {}) or {}
+                    doc_id = doc.get("id", "") or doc.get("doc_id", "")
+                manual_text.append({
+                    "index": i + 1,
+                    "documentId": meta.get("document_id", "") or doc_id,
+                    "sectionTitle": meta.get("section_title") or meta.get("chunk_label") or "",
+                    "content": content[:1200],
+                })
+            inferred_scope = self._infer_revision_scope(request_text, steps)
+            scope_hint = (
+                f"程序已确定本次修订范围为：{json.dumps(inferred_scope, ensure_ascii=False)}；"
+                "请严格为范围内每个 stepId 返回一个 item。\n"
+                if inferred_scope else ""
+            )
+
+            prompt = (
+                "你是检修任务步骤修订代理。请只根据员工修改要求和维修手册证据生成修订预览，"
+                "不得直接执行或声称已写入数据库。必须输出 JSON 对象，不要 Markdown。\n"
+                "范围规则：从员工表达中提取 stepIds/startOrder/endOrder；范围不清时 needsClarification=true。\n"
+                "如果程序已根据员工明确的‘全部/前N步/后N步/第N步/区间’给出范围，必须完整覆盖该范围内的每一个 stepId，不能遗漏任何一步；"
+                "范围内的已完成步骤只标记 COMPLETED_SKIPPED，范围内的待执行步骤必须继续生成或按手册锁定。\n"
+                "步骤处理规则：手册明确覆盖且原步骤与手册一致 -> MANUAL_LOCKED；手册覆盖但原步骤冲突 -> MANUAL_CORRECTED；"
+                "没有有效手册依据 -> FIELD_REGENERATED。范围内状态为 SUBMITTED、COMPLETED、AI_PASSED、SKIPPED 的步骤只能返回 COMPLETED_SKIPPED，"
+                "PENDING/AI_REJECTED 步骤绝不能返回 COMPLETED_SKIPPED，必须按可修改步骤继续匹配手册或重新生成。\n"
+                "如果发现任务中存在员工明确指出的多余步骤，且该步骤为 PENDING/AI_REJECTED，可返回 REMOVE_EXTRA；"
+                "REMOVE_EXTRA 只能用于多余步骤，必须填写删除原因，并保留 stepId/sortOrder。已提交、已完成或已通过AI的步骤绝不能删除。\n"
+                "MANUAL_LOCKED/MANUAL_CORRECTED 的 sources 必须至少包含一个 type=manual，且 documentId 必须原样取自手册检索结果；"
+                "没有可引用手册时绝不能使用这两个 action。\n"
+                "JSON 结构：{\"needsClarification\":false,\"clarificationQuestion\":\"\","
+                "\"scope\":{\"stepIds\":[],\"startOrder\":null,\"endOrder\":null,\"reason\":\"\"},"
+                "\"items\":[{\"stepId\":0,\"sortOrder\":0,\"action\":\"MANUAL_LOCKED|MANUAL_CORRECTED|FIELD_REGENERATED|COMPLETED_SKIPPED|REMOVE_EXTRA\","
+                "\"title\":\"\",\"content\":\"\",\"safetyNote\":\"\",\"requirePhoto\":false,"
+                "\"requireNote\":false,\"estimatedMinutes\":null,\"sources\":[],\"reason\":\"\",\"risk\":\"\"}]}\n\n"
+                f"设备：{device_name or ''}（{device_id or ''}）\n"
+                f"故障描述：{fault_description}\n"
+                f"员工修改要求：{request_text}\n"
+                f"{scope_hint}"
+                f"现有步骤：{json.dumps(steps, ensure_ascii=False)}\n"
+                f"手册检索结果：{json.dumps(manual_text, ensure_ascii=False)}\n"
+                "必须保留现有步骤的 stepId 和 sortOrder；MANUAL_LOCKED 的 content 可以为空，Java 将保留原内容。"
+            )
+            result = await self.run(AgentInput(
+                user_message=prompt,
+                session_id=f"task-revision-{device_name or 'unknown'}",
+            ), temperature=0.1)
+            data = self._extract_json_object(result.message or "")
+            if not isinstance(data, dict):
+                return {"success": False, "error": "无法解析步骤修订预览"}
+            # 员工明确给出范围时，以确定性解析结果为准；即使模型同时返回
+            # needsClarification，也不应阻断一个已经足够明确的请求。
+            if inferred_scope:
+                data["scope"] = inferred_scope
+                data["needsClarification"] = False
+            if data.get("needsClarification"):
+                return {
+                    "success": True,
+                    "needsClarification": True,
+                    "clarificationQuestion": data.get("clarificationQuestion") or "请明确需要修改的步骤范围。",
+                    "scope": data.get("scope") or {},
+                    "items": [],
+                }
+            # 范围中的“前/后/最后 N 步”和“全部”必须按当前任务的真实序号
+            # 确定，不能让模型凭上下文猜测。例如 5 步任务的“最后 3 步”
+            # 应是 3-5，而不是模型偶尔返回的 2-4。
+            items = data.get("items")
+            if not isinstance(items, list) or not items:
+                return {"success": False, "error": "修订代理没有返回有效步骤"}
+            valid_actions = {"MANUAL_LOCKED", "MANUAL_CORRECTED", "FIELD_REGENERATED", "COMPLETED_SKIPPED", "REMOVE_EXTRA"}
+            locked_statuses = {"SUBMITTED", "COMPLETED", "AI_PASSED", "SKIPPED"}
+            status_by_id = {
+                str(step.get("stepId")): str(step.get("status") or "").upper()
+                for step in steps if isinstance(step, dict)
+            }
+            known_manual_ids = {
+                str(doc.get("documentId") or "").strip()
+                for doc in manual_text if str(doc.get("documentId") or "").strip()
+            }
+            normalized = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                action = str(item.get("action") or "").upper()
+                if action not in valid_actions:
+                    continue
+                step_id = str(item.get("stepId") or "")
+                if status_by_id.get(step_id) in locked_statuses:
+                    action = "COMPLETED_SKIPPED"
+                    item = {**item, "title": "", "content": "", "safetyNote": "", "sources": []}
+                elif action == "COMPLETED_SKIPPED":
+                    # 完成状态由 Java 根据数据库决定。模型偶尔会把待执行步骤
+                    # 误标为跳过，这里降级为普通现场重生成，避免整个预览失败。
+                    action = "FIELD_REGENERATED"
+                if action == "REMOVE_EXTRA" and status_by_id.get(step_id) not in {"PENDING", "AI_REJECTED"}:
+                    return {"success": False, "error": "只有待执行或AI未通过的步骤可以标记为多余"}
+                if action in {"MANUAL_LOCKED", "MANUAL_CORRECTED"}:
+                    sources = item.get("sources") if isinstance(item.get("sources"), list) else []
+                    cited_ids = {
+                        str(source.get("documentId") or "").strip()
+                        for source in sources
+                        if isinstance(source, dict) and str(source.get("type") or "").lower() == "manual"
+                    }
+                    if not known_manual_ids or not (known_manual_ids & cited_ids):
+                        return {"success": False, "error": "手册处理结果缺少可验证的手册来源，请重新生成"}
+                normalized.append({**item, "action": action})
+            if not normalized:
+                return {"success": False, "error": "修订代理返回了不可应用的步骤"}
+            return {
+                "success": True,
+                "needsClarification": False,
+                "scope": data.get("scope") or {},
+                "scopeReason": data.get("scopeReason") or (data.get("scope") or {}).get("reason", ""),
+                "items": normalized,
+                "manualEvidence": manual_text,
+            }
+        except Exception as e:
+            logger.exception("[MaintenanceAgent] 步骤修订异常")
+            return {"success": False, "error": str(e)}
+
+    def _infer_revision_scope(
+        self,
+        request_text: str,
+        steps: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """从员工明确的序号表达确定修订范围，避免 LLM 的序号偏移。"""
+        text = re.sub(r"\s+", "", str(request_text or ""))
+        ordered = sorted(
+            [step for step in steps if isinstance(step, dict) and step.get("sortOrder") is not None],
+            key=lambda step: int(step.get("sortOrder")),
+        )
+        if not ordered:
+            return None
+
+        def number(value: str) -> Optional[int]:
+            if value.isdigit():
+                return int(value)
+            chars = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3,
+                     "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+            if value in chars:
+                return chars[value]
+            if value == "十":
+                return 10
+            if "十" in value:
+                left, _, right = value.partition("十")
+                tens = chars.get(left, 1) if left else 1
+                ones = chars.get(right, 0) if right else 0
+                return tens * 10 + ones
+            return None
+
+        max_order = max(int(step["sortOrder"]) for step in ordered)
+        start = end = None
+        reason = ""
+        if re.search(r"全部|所有|全量|整套|整个任务|全部重新生成", text):
+            start, end = 1, max_order
+            reason = "员工要求重新处理全部步骤"
+        else:
+            range_match = re.search(
+                r"第?([0-9零〇一二两三四五六七八九十]+)步?(?:到|至|-)(?:第)?([0-9零〇一二两三四五六七八九十]+)步?",
+                text,
+            )
+            if range_match:
+                start = number(range_match.group(1))
+                end = number(range_match.group(2))
+                reason = "员工明确指定步骤区间"
+            else:
+                edge_match = re.search(
+                    r"(前|最前|后|最后|末尾)([0-9零〇一二两三四五六七八九十]+)步",
+                    text,
+                )
+                if edge_match:
+                    count = number(edge_match.group(2))
+                    if count is not None:
+                        if edge_match.group(1) in {"前", "最前"}:
+                            start, end = 1, count
+                        else:
+                            start, end = max_order - count + 1, max_order
+                        reason = "员工明确指定前/后步骤范围"
+                else:
+                    single_match = re.search(
+                        r"第([0-9零〇一二两三四五六七八九十]+)步",
+                        text,
+                    )
+                    if single_match:
+                        start = end = number(single_match.group(1))
+                        reason = "员工明确指定单个步骤"
+
+        if start is None or end is None or start < 1 or end < start or end > max_order:
+            return None
+        selected = [step for step in ordered if start <= int(step["sortOrder"]) <= end]
+        if not selected:
+            return None
+        return {
+            "stepIds": [step.get("stepId") for step in selected],
+            "startOrder": start,
+            "endOrder": end,
+            "reason": reason,
+        }
+
     # ==================== 证据收集 ====================
 
     async def _collect_evidence(
@@ -199,6 +425,7 @@ class MaintenanceAgent(BaseAgent):
         fault_description: str,
         device_name: Optional[str],
         report_images: Optional[List[str]],
+        strict_manual: bool = False,
     ) -> tuple:
         """
         主动调用图谱和知识库工具，收集原始证据。
@@ -226,6 +453,7 @@ class MaintenanceAgent(BaseAgent):
             logger.warning("[MaintenanceAgent] 图谱检索失败: %s", e)
 
         # 2. 知识库检索
+        retrieval_resp = None
         try:
             from tools.knowledge_retrieval_tool import get_knowledge_retrieval_tool
             retrieval_tool = get_knowledge_retrieval_tool()
@@ -241,6 +469,11 @@ class MaintenanceAgent(BaseAgent):
                 logger.info("[MaintenanceAgent] 知识库检索命中 %d 条", len(retrieval_results))
         except Exception as e:
             logger.warning("[MaintenanceAgent] 知识库检索失败: %s", e)
+            if strict_manual:
+                raise RuntimeError(f"维修手册检索服务不可用：{e}") from e
+
+        if strict_manual and retrieval_resp is not None and not retrieval_resp.success:
+            raise RuntimeError("维修手册检索服务返回失败，请稍后重试")
 
         return graph_results, retrieval_results
 

@@ -42,6 +42,22 @@ export function rollbackToStep(taskId, stepId, reason = '') {
   return request({ url: `${BASE}/${taskId}/steps/${stepId}/rollback`, method: 'POST', data: { reason }, throwOnError: true })
 }
 
+export function createStepRevision(taskId, requestText) {
+  return request({ url: `${BASE}/${taskId}/step-revisions`, method: 'POST', data: { requestText }, throwOnError: true })
+}
+
+export function getStepRevision(taskId, revisionId) {
+  return request({ url: `${BASE}/${taskId}/step-revisions/${revisionId}`, method: 'GET', throwOnError: true })
+}
+
+export function confirmStepRevision(taskId, revisionId) {
+  return request({ url: `${BASE}/${taskId}/step-revisions/${revisionId}/confirm`, method: 'POST', throwOnError: true })
+}
+
+export function cancelStepRevision(taskId, revisionId) {
+  return request({ url: `${BASE}/${taskId}/step-revisions/${revisionId}/cancel`, method: 'POST', throwOnError: true })
+}
+
 export function updateTaskFocus(taskId, currentStepId, mode = 'NORMAL') {
   return request({ url: `${BASE}/${taskId}/focus`, method: 'POST', data: { currentStepId, mode }, throwOnError: true })
 }

@@ -30,6 +30,9 @@ const TYPE_META = {
   TASK_GENERATE_FAILED:    { ok: false },
   STEP_VERIFIED:           { ok: true },
   TASK_VOICE_TURN:         { ok: true },
+  TASK_STEP_REVISION_READY: { ok: true },
+  TASK_STEP_REVISION_APPLIED: { ok: true },
+  TASK_STEP_REVISION_FAILED: { ok: false },
 }
 
 let started = false
@@ -121,15 +124,36 @@ function applyProgress(msg) {
   }
 }
 
-// 推送的 data 里若含某个进行中任务的 refId，则直接判定该任务完成
+// 按消息类型和明确的业务 ID 命中后台任务。不能遍历 data 中所有 ID：
+// taskId、stepId、revisionId 数值可能偶然相同，会误清除另一类托盘任务。
 function resolveByMessage(msg) {
   const ok = (TYPE_META[msg.type] || {}).ok
-  const ids = Object.values(msg?.data || {}).map(String)
-  if (!ids.length) return
+  const data = msg?.data || {}
+  const revisionMessage = msg.type?.startsWith('TASK_STEP_REVISION_')
+  const expectedKind = revisionMessage ? 'stepRevision'
+    : msg.type?.startsWith('KNOWLEDGE_') ? 'knowledge'
+      : msg.type?.startsWith('TASK_GENERAT') ? 'task'
+        : msg.type === 'STEP_VERIFIED' ? 'step' : null
+  const businessId = revisionMessage ? data.revisionId
+    : expectedKind === 'knowledge' ? data.manualId
+      : expectedKind === 'task' ? data.taskId
+        : expectedKind === 'step' ? data.stepId : null
+  if (!expectedKind || businessId == null) return
   for (const job of Object.values(state.jobs)) {
-    if (job.status === 'running' && ids.includes(String(job.refId))) {
+    if (job.status === 'running' && job.kind === expectedKind && String(job.refId) === String(businessId)) {
       if (ok === false) failJob(job.key)                       // 失败：标红暂留
       else if (job.kind === 'knowledge') completeJob(job.key)  // 知识导入：冲 100% 再移除
+      else if (job.kind === 'review') {
+        // 审核没有独立的 WS 事件时由 autoReviewStatus 轮询确认，避免
+        // 同一 taskId 的步骤通知误把审核托盘提前移除。
+        continue
+      }
+      else if (job.kind === 'stepRevision' && msg.type === 'TASK_STEP_REVISION_READY') {
+        job.previewReady = true
+        job.stage = '预览待确认'
+        persist()
+      }
+      else if (job.kind === 'stepRevision' && msg.type === 'TASK_STEP_REVISION_APPLIED') completeJob(job.key)
       else { delete state.jobs[job.key]; persist() }           // 其它：直接清理
     }
   }
@@ -149,6 +173,23 @@ async function checkStatus(job) {
     if (st && /fail/i.test(st)) return 'failed' // GENERATE_FAILED 等
     // 非「生成中/待生成/失败」即视为完成
     if (st && !['GENERATING', 'PENDING', 'generating', 'pending'].includes(st)) return 'success'
+    return 'running'
+  }
+  if (job.kind === 'review') {
+    // 任务结果保存后，任务本身会很快进入 CLOSED；审核状态单独在
+    // autoReviewStatus 中推进，不能复用 task 状态判断。
+    const res = await request({ url: `/weixiu/task/${job.refId}`, method: 'GET', silent: true })
+    const reviewStatus = String(res?.data?.autoReviewStatus || '').toUpperCase()
+    if (['AUTO_ARCHIVED', 'MANUAL_REVIEW', 'MANUAL_APPROVED', 'MANUAL_REJECTED', 'FAILED'].includes(reviewStatus)) return 'success'
+    return 'running'
+  }
+  if (job.kind === 'stepRevision') {
+    if (!job.taskId || !job.revisionId) return 'running'
+    const res = await request({ url: `/weixiu/task/${job.taskId}/step-revisions/${job.revisionId}`, method: 'GET', silent: true })
+    const st = String(res?.data?.status || '').toUpperCase()
+    if (st === 'PREVIEW_READY') return 'preview'
+    if (st === 'APPLIED' || st === 'CANCELLED') return 'success'
+    if (st === 'FAILED' || st === 'EXPIRED') return 'failed'
     return 'running'
   }
   if (job.kind === 'step') {
@@ -171,10 +212,11 @@ async function reconcileAll() {
     try {
       const r = await checkStatus(job)
       if (r === 'success') {
-        if (job.kind === 'knowledge') completeJob(job.key)        // 知识导入：冲 100% 再移除
+        if (job.kind === 'knowledge' || job.kind === 'review' || job.kind === 'stepRevision') completeJob(job.key) // 展示完成态后移除
         else { delete state.jobs[job.key]; persist() }
       }
       else if (r === 'failed') { failJob(job.key) } // 标红暂留再移除
+      else if (r === 'preview') { job.previewReady = true; job.stage = '预览待确认'; persist() }
     } catch (e) { /* 网络抖动忽略，下次再对账 */ }
   }
   if (!hasRunning()) stopTimer()
@@ -213,10 +255,11 @@ export const notifyStore = {
 
   /** 通用：登记一个后台任务（触发会产生 WS 通知的接口后调用）。
    *  step 类需额外传 taskId，供 checkStatus 轮询兜底定位步骤（兼容漏推）。 */
-  trackJob({ key, kind, refId, taskId, title }) {
+  trackJob({ key, kind, refId, taskId, revisionId, title }) {
     state.jobs[key] = {
       key, kind, refId: String(refId),
       taskId: taskId != null ? String(taskId) : null,
+      revisionId: revisionId != null ? String(revisionId) : null,
       title, status: 'running', startedAt: Date.now(), percent: 0, stage: '',
     }
     persist()
@@ -226,6 +269,22 @@ export const notifyStore = {
   /** 便捷：登记一个「知识导入」任务（按 manualId 对账 parseStatus） */
   trackKnowledgeImport(manualId, title) {
     this.trackJob({ key: 'kn:' + manualId, kind: 'knowledge', refId: manualId, title: title || '知识导入' })
+  },
+
+  trackStepRevision(taskId, revisionId, title) {
+    this.trackJob({ key: 'step-revision:' + revisionId, kind: 'stepRevision', refId: revisionId, revisionId, taskId, title: title || '步骤修改：分析中' })
+  },
+
+  openJob(job) {
+    if (!job || job.kind !== 'stepRevision') return
+    const targetPath = `/user/tasks/${job.taskId}`
+    if (window.location.pathname !== targetPath) {
+      window.location.href = `${targetPath}?revisionId=${encodeURIComponent(job.revisionId)}`
+      return
+    }
+    window.dispatchEvent(new CustomEvent('step-revision-preview', {
+      detail: { taskId: job.taskId, revisionId: job.revisionId },
+    }))
   },
 
   /** 手动从托盘移除 */

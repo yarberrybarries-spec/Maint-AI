@@ -90,4 +90,12 @@ public class MaintenanceTask implements Serializable {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** 自动审核快捷状态，详细分数与Agent结果存于 task_auto_review。 */
+    private String autoReviewStatus;
+    private String autoReviewEvidenceStatus;
+    private Integer autoReviewScore;
+    private Integer autoReviewEvidenceScore;
+    private String autoReviewReason;
+    private LocalDateTime autoReviewUpdatedAt;
 }

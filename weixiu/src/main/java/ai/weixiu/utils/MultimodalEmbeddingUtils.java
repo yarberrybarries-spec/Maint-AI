@@ -83,7 +83,16 @@ public class MultimodalEmbeddingUtils {
                 .build();
         this.objectMapper = objectMapper;
         this.minioClient = minioClient;
-        this.minioEndpointUri = URI.create(minioProperties.getEndpoint());
+        // MinioProperties also accepts the convenient `localhost:9000` form.
+        // Normalize it before parsing; otherwise URI treats `localhost` as a
+        // scheme and local MinIO URLs are incorrectly rejected as external URLs.
+        String minioEndpoint = minioProperties.getEndpoint() == null
+                ? "http://localhost:9000"
+                : minioProperties.getEndpoint().trim();
+        if (!minioEndpoint.matches("^[A-Za-z][A-Za-z0-9+.-]*://.*$")) {
+            minioEndpoint = (minioProperties.isSecure() ? "https://" : "http://") + minioEndpoint;
+        }
+        this.minioEndpointUri = URI.create(minioEndpoint);
         this.allowedExternalHosts = Arrays.stream(allowedHosts.split(","))
                 .map(String::trim).filter(s -> !s.isBlank())
                 .map(String::toLowerCase).collect(Collectors.toUnmodifiableSet());

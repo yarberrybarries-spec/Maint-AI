@@ -15,6 +15,10 @@ import ai.weixiu.entity.TaskChatMessage;
 import ai.weixiu.entity.User;
 import ai.weixiu.mapper.UserMapper;
 import ai.weixiu.service.MaintenanceTaskService;
+import ai.weixiu.service.TaskAutoReviewService;
+import ai.weixiu.service.TaskStepRevisionService;
+import ai.weixiu.entity.TaskStepRevision;
+import ai.weixiu.entity.TaskAutoReview;
 import ai.weixiu.utils.AiStreamEventUtils;
 import ai.weixiu.utils.BaseContext;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +45,8 @@ public class MaintenanceTaskController {
     private final UserMapper userMapper;
     private final WebClient webClient;
     private final ObjectMapper objectMapper;
+    private final TaskAutoReviewService taskAutoReviewService;
+    private final TaskStepRevisionService taskStepRevisionService;
 
     /** 创建检修任务（自动触发LLM生成步骤） */
     @PostMapping
@@ -95,6 +101,45 @@ public class MaintenanceTaskController {
                                                         @RequestBody TaskResolutionDTO dto) {
         verifyAccess(taskId);
         return Result.success(taskService.confirmResolution(taskId, dto));
+    }
+
+    @GetMapping("/{taskId}/auto-review")
+    public Result<TaskAutoReview> getAutoReview(@PathVariable Long taskId) {
+        verifyAccess(taskId);
+        return Result.success(taskAutoReviewService.latest(taskId));
+    }
+
+    @RequireAdmin
+    @PostMapping("/{taskId}/auto-review/decision")
+    public Result<TaskAutoReview> decideAutoReview(@PathVariable Long taskId, @RequestBody Map<String,Object> body) {
+        String decision = String.valueOf(body == null ? "" : body.getOrDefault("decision", ""));
+        String comment = String.valueOf(body == null ? "" : body.getOrDefault("comment", ""));
+        return Result.success(taskAutoReviewService.manualDecision(taskId, decision, BaseContext.getCurrentId(), comment));
+    }
+
+    @PostMapping("/{taskId}/step-revisions")
+    public Result<TaskStepRevision> createStepRevision(@PathVariable Long taskId, @RequestBody Map<String, Object> body) {
+        verifyAccess(taskId);
+        String requestText = body == null ? "" : String.valueOf(body.getOrDefault("requestText", ""));
+        return Result.success(taskStepRevisionService.create(taskId, BaseContext.getCurrentId(), requestText));
+    }
+
+    @GetMapping("/{taskId}/step-revisions/{revisionId}")
+    public Result<TaskStepRevision> getStepRevision(@PathVariable Long taskId, @PathVariable Long revisionId) {
+        verifyAccess(taskId);
+        return Result.success(taskStepRevisionService.get(taskId, revisionId));
+    }
+
+    @PostMapping("/{taskId}/step-revisions/{revisionId}/confirm")
+    public Result<TaskStepRevision> confirmStepRevision(@PathVariable Long taskId, @PathVariable Long revisionId) {
+        verifyAccess(taskId);
+        return Result.success(taskStepRevisionService.confirm(taskId, revisionId, BaseContext.getCurrentId()));
+    }
+
+    @PostMapping("/{taskId}/step-revisions/{revisionId}/cancel")
+    public Result<TaskStepRevision> cancelStepRevision(@PathVariable Long taskId, @PathVariable Long revisionId) {
+        verifyAccess(taskId);
+        return Result.success(taskStepRevisionService.cancel(taskId, revisionId, BaseContext.getCurrentId()));
     }
 
 

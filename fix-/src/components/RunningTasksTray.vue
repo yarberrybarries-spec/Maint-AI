@@ -100,7 +100,7 @@ function itemLeave(el, done) {
       </header>
 
       <transition-group tag="ul" class="tray-list" :css="false" @enter="itemEnter" @leave="itemLeave">
-        <li v-for="job in jobs" :key="job.key" class="tray-item" :class="{ 'is-failed': job.status === 'failed', 'is-done': job.status === 'done' }">
+        <li v-for="job in jobs" :key="job.key" class="tray-item" :class="{ 'is-failed': job.status === 'failed', 'is-done': job.status === 'done', 'is-clickable': job.kind === 'stepRevision' && job.previewReady }" @click="notifyStore.openJob(job)">
           <span v-if="job.status === 'failed'" class="ti-fail" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -117,6 +117,15 @@ function itemLeave(el, done) {
             <div class="ti-meta">
               <template v-if="job.status === 'failed'">
                 <span class="ti-failtext">生成失败，请稍后重试</span>
+              </template>
+              <template v-else-if="job.kind === 'stepRevision'">
+                <span class="ti-time">{{ job.previewReady ? '预览已生成 · 点击查看' : '正在重新生成任务步骤 · 已运行 ' + elapsed(job.startedAt) }}</span>
+                <span v-if="!job.previewReady" class="ti-bar"><i /></span>
+              </template>
+              <template v-else-if="job.kind === 'review'">
+                <span v-if="job.status === 'done'" class="ti-stage">审核完成</span>
+                <span v-else class="ti-time">AI审核中 · 已运行 {{ elapsed(job.startedAt) }}</span>
+                <span v-if="job.status === 'running'" class="ti-bar"><i /></span>
               </template>
               <template v-else-if="job.kind === 'knowledge'">
                 <span class="ti-stage">{{ job.stage || '处理中' }}</span>
@@ -246,6 +255,7 @@ function itemLeave(el, done) {
   transition: background 0.16s ease;
 }
 .tray-item:hover { background: var(--plaza-bg-card); }
+.tray-item.is-clickable { cursor: pointer; }
 .tray-item.is-failed { background: rgba(197, 64, 44, 0.06); }
 .tray-item.is-failed:hover { background: rgba(197, 64, 44, 0.1); }
 

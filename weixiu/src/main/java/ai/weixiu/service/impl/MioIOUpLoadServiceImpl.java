@@ -171,8 +171,13 @@ public class MioIOUpLoadServiceImpl implements MioIOUpLoadService {
         if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
             publicBaseUrl = minioProperties.getEndpoint();
         }
-        return publicBaseUrl.replaceAll("/+$", "") + "/"
-                + bucketName + "/" + objectName;
+        String base = publicBaseUrl.replaceAll("/+$", "");
+        String bucketSuffix = "/" + bucketName;
+        // The public base may already be bucket-scoped. Append the bucket exactly once.
+        if (base.endsWith(bucketSuffix)) {
+            return base + "/" + objectName;
+        }
+        return base + bucketSuffix + "/" + objectName;
     }
     /**
      * 获取文件的预签名访问 URL。

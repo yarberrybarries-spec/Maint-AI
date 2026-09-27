@@ -37,4 +37,9 @@ public class TaskStepRecordVO {
     /** AI 验收置信度等级：高/中/低（由 0-1 原始值换算，>80%高 / [50%,80%]中 / <50%低） */
     private String aiConfidence;
     private String aiReason;
+
+    private String revisionState;
+    private String revisionNotice;
+    private Long lastRevisionId;
+    private LocalDateTime lastRevisionAt;
 }

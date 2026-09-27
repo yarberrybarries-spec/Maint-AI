@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, DocumentAdd, Share, CloseBold, Right } from '@element-plus/icons-vue'
-import { getTaskList, promoteToProcedure, skipPromotion } from '@/api/task'
+import { getTaskList, getTaskSteps, getTaskAutoReview, promoteToProcedure, skipPromotion, decideTaskAutoReview } from '@/api/task'
 import DistillationReviewPanel from '@/components/DistillationReviewPanel.vue'
 import TaskEvidenceCandidateReview from '@/components/TaskEvidenceCandidateReview.vue'
 import ExpirationReviewSection from '@/components/ExpirationReviewSection.vue'
@@ -22,6 +22,7 @@ const filters = reactive({
   deviceName: '',
   promotedProcedure: '',
   promotedGraph: '',
+  autoReviewStatus: '',
 })
 
 /* ========== 表格 / 分页 ========== */
@@ -31,7 +32,9 @@ const pagination = reactive({ page: 1, size: 15, total: 0 })
 const busyIds = ref(new Set())
 
 /* ========== 展开行 ========== */
-const expandedRows = ref(new Set())
+const autoReviewDetails = reactive({})
+const taskSteps = reactive({})
+const taskStepsLoading = reactive({})
 
 /* ========== 状态枚举 ========== */
 const STATUS_MAP = {
@@ -42,6 +45,19 @@ const STATUS_MAP = {
   EXECUTING:       { label: '执行中',   color: '#a8605f', bg: '#f5ece8' },
   CLOSED:          { label: '已关闭',   color: 'var(--plaza-text-muted)', bg: 'var(--plaza-panel-bg)' },
   RESOLUTION_PENDING: { label: '待确认结果', color: '#df9226', bg: '#fdf2e0' },
+}
+const REVIEW_MAP = {
+  PENDING: { label: '审核中', color: '#df9226', bg: '#fdf2e0' },
+  PROCESSING: { label: 'AI审核中', color: '#2563eb', bg: '#eaf2ff' },
+  AUTO_ARCHIVED: { label: '自动归档', color: '#5e8c3e', bg: '#f1f5e6' },
+  MANUAL_REVIEW: { label: '待人工审核', color: '#c5402c', bg: '#fbeae4' },
+  FAILED: { label: '审核异常', color: '#c5402c', bg: '#fbeae4' },
+  MANUAL_APPROVED: { label: '人工通过', color: '#5e8c3e', bg: '#f1f5e6' },
+  MANUAL_REJECTED: { label: '人工驳回', color: '#c5402c', bg: '#fbeae4' },
+}
+const STEP_STATUS_MAP = {
+  PENDING: '待执行', SUBMITTED: 'AI审核中', AI_REJECTED: 'AI未通过',
+  AI_PASSED: 'AI已通过', COMPLETED: '已完成', SKIPPED: '已跳过',
 }
 const PROMO_MAP = {
   PENDING:  { label: '待沉淀', color: '#df9226', bg: '#fdf2e0' },
@@ -54,6 +70,10 @@ const URGENCY_MAP = {
   2: { label: '紧急', color: '#c5402c', bg: '#fbeae4' },
 }
 const LEVEL_MAP = { ROUTINE: '日常保养', MINOR: '小修', MAJOR: '大修' }
+const REVIEW_DIMENSIONS = {
+  evidence: '证据完整度', process: '过程记录质量', result: '维修结果完整度',
+  manual: '手册知识一致性', semantic: '内容语义一致性', traceability: '来源可追溯性',
+}
 const STATUS_OPTIONS = Object.keys(STATUS_MAP).map((k) => ({ value: k, label: STATUS_MAP[k].label }))
 const PROMO_OPTIONS = [
   { value: '',       label: '全部' },
@@ -72,6 +92,7 @@ async function loadTasks(page = 1) {
     if (filters.deviceName)        params.deviceName        = filters.deviceName
     if (filters.promotedProcedure) params.promotedProcedure = filters.promotedProcedure
     if (filters.promotedGraph)     params.promotedGraph     = filters.promotedGraph
+    if (filters.autoReviewStatus) params.autoReviewStatus = filters.autoReviewStatus
 
     const res = await getTaskList(params)
     if (res.code === '200' || res.code === 200) {
@@ -96,17 +117,28 @@ function handleReset() {
   filters.deviceName = ''
   filters.promotedProcedure = ''
   filters.promotedGraph = ''
+  filters.autoReviewStatus = ''
   loadTasks(1)
 }
 
 /* ========== 行展开 ========== */
-function toggleExpand(id) {
-  const s = new Set(expandedRows.value)
-  s.has(id) ? s.delete(id) : s.add(id)
-  expandedRows.value = s
-}
-function isExpanded(id) {
-  return expandedRows.value.has(id)
+async function handleExpandChange(row, expanded) {
+  if (!expanded.some((item) => item.id === row.id)) return
+  const id = row.id
+  // 每次展开都重新读取，确保员工刚确认的步骤修订和最新审核版本立即可见。
+  const requests = [
+    getTaskAutoReview(id)
+      .then((res) => { autoReviewDetails[id] = res.data || null })
+      .catch(() => { autoReviewDetails[id] = null }),
+  ]
+  taskStepsLoading[id] = true
+  requests.push(
+    getTaskSteps(id)
+      .then((res) => { taskSteps[id] = Array.isArray(res.data) ? res.data : [] })
+      .catch(() => { taskSteps[id] = [] })
+      .finally(() => { taskStepsLoading[id] = false })
+  )
+  await Promise.all(requests)
 }
 
 /* ========== 沉淀操作 ========== */
@@ -147,6 +179,20 @@ async function handleSkip(row, type) {
   } finally {
     removeBusy(row.id)
   }
+}
+
+async function handleAutoReview(row, decision) {
+  const label = decision === 'MANUAL_APPROVED' ? '通过' : '驳回'
+  try {
+    await ElMessageBox.confirm(`确认${label}任务「${row.taskNumber}」的自动审核结果？`, '人工审核', { confirmButtonText: '确认', cancelButtonText: '取消', type: decision === 'MANUAL_APPROVED' ? 'success' : 'warning' })
+  } catch { return }
+  addBusy(row.id)
+  try {
+    await decideTaskAutoReview(row.id, decision, `管理员在任务列表中${label}`)
+    ElMessage.success(`任务已${label}`)
+    await loadTasks(pagination.page)
+  } catch (e) { ElMessage.error(`审核操作失败：${e.message || ''}`) }
+  finally { removeBusy(row.id) }
 }
 
 function addBusy(id) { const s = new Set(busyIds.value); s.add(id); busyIds.value = s }
@@ -284,6 +330,18 @@ onMounted(() => loadTasks(1))
                   <el-option v-for="o in PROMO_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
                 </el-select>
               </div>
+              <div class="filter-item">
+                <label>自动审核</label>
+                <el-select v-model="filters.autoReviewStatus" placeholder="全部" clearable size="default">
+                  <el-option label="审核中" value="PENDING" />
+                  <el-option label="AI审核中" value="PROCESSING" />
+                  <el-option label="自动归档" value="AUTO_ARCHIVED" />
+                  <el-option label="待人工审核" value="MANUAL_REVIEW" />
+                  <el-option label="审核异常" value="FAILED" />
+                  <el-option label="人工通过" value="MANUAL_APPROVED" />
+                  <el-option label="人工驳回" value="MANUAL_REJECTED" />
+                </el-select>
+              </div>
               <div class="filter-btns">
                 <el-button type="primary" @click="handleSearch">
                   <el-icon><Search /></el-icon>搜索
@@ -306,7 +364,7 @@ onMounted(() => loadTasks(1))
             style="width: 100%"
             :header-cell-style="{ background: 'var(--plaza-panel-bg)', color: 'var(--plaza-text)', fontWeight: 600, fontSize: '12px', letterSpacing: '0.4px' }"
             :cell-style="{ fontSize: '13.5px' }"
-            @row-click="(row) => toggleExpand(row.id)"
+            @expand-change="handleExpandChange"
           >
             <el-table-column type="expand" width="40">
               <template #default="{ row }">
@@ -338,6 +396,45 @@ onMounted(() => loadTasks(1))
                       <span class="exp-label">更新时间</span>
                       <span class="exp-val mono">{{ formatDate(row.updatedAt) }}</span>
                     </div>
+                    <div class="exp-item">
+                      <span class="exp-label">自动审核</span>
+                      <span class="exp-val">
+                        {{ (REVIEW_MAP[row.autoReviewStatus] || {}).label || '未触发' }}
+                        <template v-if="row.autoReviewScore != null">（{{ row.autoReviewScore }}分）</template>
+                      </span>
+                    </div>
+                    <div class="exp-item">
+                      <span class="exp-label">审核证据版本</span>
+                      <span class="exp-val mono">{{ row.evidenceVersion ? `v${row.evidenceVersion}` : '未生成' }}</span>
+                    </div>
+                    <div v-if="row.autoReviewReason" class="exp-item">
+                      <span class="exp-label">审核说明</span>
+                      <span class="exp-val">{{ row.autoReviewReason }}</span>
+                    </div>
+                  </div>
+                  <div v-if="autoReviewDetails[row.id]?.dimensionScores" class="exp-review-detail">
+                    <span class="exp-label">六项评分 · 证据 v{{ autoReviewDetails[row.id].evidenceVersion }}</span>
+                    <div class="exp-score-list">
+                      <span v-for="(score, key) in autoReviewDetails[row.id].dimensionScores" :key="key" class="exp-score">
+                        {{ REVIEW_DIMENSIONS[key] || key }}：{{ score }}
+                      </span>
+                    </div>
+                  </div>
+                  <div class="exp-steps">
+                    <span class="exp-label">当前生效检修步骤</span>
+                    <div v-if="taskStepsLoading[row.id]" class="exp-empty">正在读取最终步骤…</div>
+                    <div v-else-if="taskSteps[row.id]?.length" class="exp-step-list">
+                      <article v-for="step in taskSteps[row.id]" :key="step.id" class="exp-step-card">
+                        <header>
+                          <b>第 {{ step.sortOrder }} 步 · {{ step.title }}</b>
+                          <span>{{ STEP_STATUS_MAP[step.status] || step.status }}</span>
+                        </header>
+                        <p>{{ step.content || '暂无步骤说明' }}</p>
+                        <small v-if="step.note">完成记录：{{ step.note }}</small>
+                        <small v-if="step.images?.length">现场图片：{{ step.images.length }} 张</small>
+                      </article>
+                    </div>
+                    <div v-else class="exp-empty">暂无步骤</div>
                   </div>
                   <div v-if="row.graphExtraction" class="exp-extraction">
                     <span class="exp-label">AI 图谱线索</span>
@@ -409,6 +506,15 @@ onMounted(() => loadTasks(1))
               </template>
             </el-table-column>
 
+            <el-table-column prop="autoReviewStatus" label="自动审核" width="105" align="center">
+              <template #default="{ row }">
+                <span v-if="row.autoReviewStatus" class="tag-sm" :style="{ background: (REVIEW_MAP[row.autoReviewStatus] || {}).bg, color: (REVIEW_MAP[row.autoReviewStatus] || {}).color }">
+                  {{ (REVIEW_MAP[row.autoReviewStatus] || {}).label || row.autoReviewStatus }}
+                </span>
+                <span v-else class="tag-sm" style="background:var(--plaza-panel-bg);color:var(--plaza-text-muted)">未触发</span>
+              </template>
+            </el-table-column>
+
             <el-table-column prop="promotedProcedure" label="规程沉淀" width="82" align="center">
               <template #default="{ row }">
                 <span
@@ -460,6 +566,10 @@ onMounted(() => loadTasks(1))
                   >
                     去沉淀<el-icon style="margin-left:2px"><Right /></el-icon>
                   </el-button>
+                  <template v-if="row.autoReviewStatus === 'MANUAL_REVIEW'">
+                    <el-button size="small" type="success" plain :loading="isBusy(row.id)" @click="handleAutoReview(row, 'MANUAL_APPROVED')">通过</el-button>
+                    <el-button size="small" type="danger" plain :loading="isBusy(row.id)" @click="handleAutoReview(row, 'MANUAL_REJECTED')">驳回</el-button>
+                  </template>
                   <el-button
                     v-if="canPromote(row) && row.promotedProcedure === 'PENDING'"
                     size="small"
@@ -731,6 +841,65 @@ onMounted(() => loadTasks(1))
 .exp-val.mono {
   font-family: var(--font-mono);
   font-size: 12px;
+}
+.exp-review-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--plaza-border);
+}
+.exp-score-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.exp-score {
+  padding: 4px 8px;
+  border: 1px solid var(--plaza-border);
+  border-radius: 999px;
+  color: var(--plaza-text);
+  background: var(--plaza-bg-input);
+  font-size: 11px;
+}
+.exp-steps {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--plaza-border);
+}
+.exp-step-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.exp-step-card {
+  padding: 10px 12px;
+  border: 1px solid var(--plaza-border);
+  border-radius: 8px;
+  background: var(--plaza-bg-input);
+}
+.exp-step-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--plaza-heading);
+  font-size: 12px;
+}
+.exp-step-card header span {
+  flex: none;
+  color: var(--plaza-accent);
+  font-size: 11px;
+}
+.exp-step-card p {
+  margin: 7px 0 0;
+  color: var(--plaza-text);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.exp-step-card small {
+  display: block;
+  margin-top: 5px;
+  color: var(--plaza-text-muted);
+  font-size: 11px;
 }
 .exp-extraction {
   margin-top: 12px;

@@ -59,6 +59,12 @@ public class TaskEvidenceBundleService {
                     value.put("aiConfidence", step.getAiConfidence() == null ? null : step.getAiConfidence().doubleValue());
                     value.put("aiReason", step.getAiReason());
                     value.put("sources", step.getSources());
+                    // 自动审核读取的是当前步骤本身；修订标记用于证明该内容属于
+                    // 哪一次已确认的当前版本，不读取 task_step_revision 历史快照。
+                    value.put("revisionState", step.getRevisionState());
+                    value.put("revisionNotice", step.getRevisionNotice());
+                    value.put("lastRevisionId", step.getLastRevisionId());
+                    value.put("lastRevisionAt", iso(step.getLastRevisionAt()));
                     steps.add(value);
                 });
         bundle.put("steps", steps);

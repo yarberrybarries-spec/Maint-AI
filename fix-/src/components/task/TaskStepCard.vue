@@ -16,6 +16,7 @@ import {
 } from '@element-plus/icons-vue'
 import { executeStep, forceCompleteStep, reopenStep, rollbackToStep } from '@/api/maintenanceTask'
 import { uploadImage } from '@/api/user'
+import { extractUploadedImageUrl } from '@/utils/upload'
 import { notifyStore } from '@/stores/notifyStore'
 import { stepStatus, stepActionable } from '@/constants/taskStatus'
 
@@ -64,8 +65,9 @@ async function onPickFiles(e) {
   try {
     for (const f of files) {
       const res = await uploadImage(f)
-      const url = res?.data || res?.url
-      if (url) exec.images.push(url)
+      const url = extractUploadedImageUrl(res)
+      if (!url) throw new Error('上传接口未返回有效图片地址')
+      exec.images.push(url)
     }
   } catch (err) { ElMessage.error('图片上传失败：' + (err.message || '')) }
   finally { uploading.value = false }
@@ -74,7 +76,6 @@ function removeImage(i) { exec.images.splice(i, 1) }
 
 async function submit() {
   const s = props.step
-  if (s.requirePhoto && !exec.images.length) { ElMessage.warning('该步骤要求上传照片'); return }
   if (s.requireNote && !exec.note.trim()) { ElMessage.warning('该步骤要求填写备注'); return }
   if (s.isCheckpoint && !exec.confirmed) { ElMessage.warning('请先确认检查点'); return }
   submitting.value = true
@@ -153,8 +154,9 @@ async function rollback() {
       </header>
 
       <div class="step-readout">
+        <span v-if="step.revisionNotice" class="revision-notice">{{ step.revisionNotice }}</span>
         <span v-if="step.estimatedMinutes"><el-icon><Clock /></el-icon> 约 {{ step.estimatedMinutes }} 分钟</span>
-        <span v-if="step.requirePhoto"><el-icon><Picture /></el-icon> 需现场照片</span>
+        <span v-if="step.requirePhoto"><el-icon><Picture /></el-icon> 建议现场照片</span>
         <span v-if="step.requireNote"><el-icon><Document /></el-icon> 需执行备注</span>
         <span v-if="step.isCheckpoint"><el-icon><Check /></el-icon> 合规检查点</span>
         <span v-if="!requirementCount && !step.estimatedMinutes">标准作业步骤</span>
@@ -279,7 +281,7 @@ async function rollback() {
 
           <div class="execution-actions">
             <span>
-              {{ step.requirePhoto ? '照片必填' : '照片选填' }} · {{ step.requireNote ? '备注必填' : '备注选填' }}
+              {{ step.requirePhoto ? '照片建议上传' : '照片选填' }} · {{ step.requireNote ? '备注必填' : '备注选填' }}
             </span>
             <button
               v-if="rejected"
@@ -444,6 +446,7 @@ async function rollback() {
 }
 .step-readout > span { display: inline-flex; align-items: center; gap: 5px; }
 .step-readout > span .el-icon { color: var(--plaza-accent); font-size: 12px; }
+.step-readout > .revision-notice { padding: 3px 7px; border-radius: 999px; color: var(--plaza-accent); background: var(--plaza-accent-soft); font-weight: 750; }
 .step-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 
 .ask-button,

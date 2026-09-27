@@ -91,6 +91,8 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
     private ai.weixiu.mq.TaskEvidenceExtractionProducer taskEvidenceExtractionProducer;
     @org.springframework.beans.factory.annotation.Autowired
     private ai.weixiu.service.TaskEvidenceExtractionFailureService taskEvidenceExtractionFailureService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private ai.weixiu.service.TaskAutoReviewService taskAutoReviewService;
 
     @Value("${weixiu.task-validate.enabled:true}")
     private boolean validateEnabled;
@@ -215,16 +217,15 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
         if (step == null || !step.getTaskId().equals(taskId)) {
             throw new NotFoundException("步骤不存在");
         }
-        if ("COMPLETED".equals(step.getStatus()) || "SUBMITTED".equals(step.getStatus())) {
+        // 提交后即进入证据/AI审核链路，步骤内容和现场证据必须保持不可变。
+        // 如审核未通过，状态会回到 AI_REJECTED 后再允许重新执行。
+        if ("COMPLETED".equals(step.getStatus()) || "AI_PASSED".equals(step.getStatus())
+                || "SUBMITTED".equals(step.getStatus())) {
             throw new TaskStateException("该步骤已提交或已完成，当前状态: " + step.getStatus());
         }
 
-        // 合规校验：拍照/备注
-        if (Boolean.TRUE.equals(step.getRequirePhoto())) {
-            if (dto.getImages() == null || dto.getImages().isEmpty()) {
-                throw new IllegalArgumentException("该步骤要求上传照片");
-            }
-        }
+        // 图片是自动审核的重要加分证据，但普通步骤不再作为提交硬门槛。
+        // 现场无法拍照时，工人仍可通过具体文字说明完成步骤；安全检查点仍由下方确认项硬门控。
         if (Boolean.TRUE.equals(step.getRequireNote())) {
             if (dto.getNote() == null || dto.getNote().isBlank()) {
                 throw new IllegalArgumentException("该步骤要求填写执行备注");
@@ -240,15 +241,23 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
             step.setCheckpointConfirmed(true);
         }
 
+        // 先读取图片，再改变步骤状态。图片不可读时直接返回 400，步骤仍保持
+        // PENDING/原状态，用户可以立即重新上传，而不会被锁成 SUBMITTED。
+        List<String> llmImages = stepImagesForLlm(dto.getImages(),
+                "taskId=" + task.getId() + " stepId=" + step.getId());
+
         // 保存证据，状态改为 SUBMITTED，等待AI验证
         step.setImages(dto.getImages());
         step.setNote(dto.getNote());
         step.setStatus("SUBMITTED");
+        step.setAiPass(null);
+        step.setAiConfidence(null);
+        step.setAiReason(null);
         stepMapper.updateById(step);
         saveFocusStep(taskId, BaseContext.getCurrentId(), nextIncompleteStep(taskId, stepId), "NORMAL");
 
         // 发MQ给Python做AI多模态验证
-        sendStepVerifyMessage(task, step);
+        sendStepVerifyMessage(task, step, llmImages);
 
         log.info("[任务] 步骤提交等待AI验证 taskId={} stepId={} title={}", taskId, stepId, step.getTitle());
         return toStepVO(step);
@@ -537,6 +546,9 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
         if (query.getPromotedGraph() != null && !query.getPromotedGraph().isBlank()) {
             wrapper.eq(MaintenanceTask::getPromotedGraph, query.getPromotedGraph());
         }
+        if (query.getAutoReviewStatus() != null && !query.getAutoReviewStatus().isBlank()) {
+            wrapper.eq(MaintenanceTask::getAutoReviewStatus, query.getAutoReviewStatus());
+        }
         wrapper.orderByDesc(MaintenanceTask::getCreatedAt);
 
         Page<MaintenanceTask> result = taskMapper.selectPage(page, wrapper);
@@ -684,6 +696,7 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
                     .setReviewStatus("PENDING").setRowVersion(0);
             taskCandidateMapper.insert(candidate);
         }
+        taskAutoReviewService.schedule(task);
         final Long candidateId = candidate.getId();
         final Integer evidenceVersion = task.getEvidenceVersion();
         final String requestId = task.getExtractionRequestId();
@@ -1222,6 +1235,23 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
     }
 
     /**
+     * 步骤验证专用图片转换：提交了图片但全部无法读取时必须中断，
+     * 否则 Python 会把空列表误判为“工人未上传照片”。允许多张图片部分失败，
+     * 只要至少一张成功转换即可继续验证。
+     */
+    private List<String> stepImagesForLlm(List<String> urls, String logCtx) {
+        if (urls == null || urls.isEmpty()) {
+            return List.of();
+        }
+        List<String> converted = multimodalEmbeddingUtils.downloadImagesToBase64(urls);
+        if (converted == null || converted.isEmpty()) {
+            log.warn("[任务] 步骤图片全部无法读取，拒绝发送空图片验证消息 {}", logCtx);
+            throw new IllegalArgumentException("步骤图片无法读取，请重新上传后再提交");
+        }
+        return converted;
+    }
+
+    /**
      * 检修任务入口闸：轻量、宽松、可降级。
      * <p>Layer1 规则（免费）挡空/过短/乱码；Layer2 便宜快模型（{@code /ai/validate}）挡与检修无关的垃圾。
      * 校验不过抛 {@link IllegalArgumentException}（理由透出前端 400）；校验服务不可用则 fail-open 放行，
@@ -1364,13 +1394,18 @@ public class MaintenanceTaskServiceImpl implements MaintenanceTaskService {
     }
 
     private void sendStepVerifyMessage(MaintenanceTask task, TaskStepRecord step) {
+        sendStepVerifyMessage(task, step, stepImagesForLlm(step.getImages(),
+                "taskId=" + task.getId() + " stepId=" + step.getId()));
+    }
+
+    private void sendStepVerifyMessage(MaintenanceTask task, TaskStepRecord step, List<String> llmImages) {
         Map<String, Object> msg = new HashMap<>();
         msg.put("taskId", task.getId());
         msg.put("stepId", step.getId());
         msg.put("stepTitle", step.getTitle());
         msg.put("stepContent", step.getContent());
         msg.put("safetyNote", step.getSafetyNote());
-        msg.put("images", imagesForLlm(step.getImages(), "taskId=" + task.getId() + " stepId=" + step.getId()));
+        msg.put("images", llmImages == null ? List.of() : llmImages);
         msg.put("note", step.getNote());
         msg.put("deviceName", task.getDeviceName());
         msg.put("faultDescription", task.getFaultDescription());
