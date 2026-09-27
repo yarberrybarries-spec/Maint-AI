@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS `knowledge_document` (
 -- =============================================
 CREATE TABLE IF NOT EXISTS `maintenance_task` (
     `id`                  BIGINT       NOT NULL COMMENT '雪花ID',
-    `task_number`         VARCHAR(64)  NOT NULL COMMENT '任务编号 MT-yyyyMMdd-xxx',
+    `task_number`         VARCHAR(40)  NOT NULL COMMENT '任务编号 MT-yyyyMMdd-ID',
     `device_id`           VARCHAR(64)  DEFAULT NULL COMMENT '设备ID（Neo4j图谱节点ID）',
     `device_name`         VARCHAR(200) DEFAULT NULL COMMENT '设备名称',
     `fault_description`   TEXT         NOT NULL COMMENT '故障描述',

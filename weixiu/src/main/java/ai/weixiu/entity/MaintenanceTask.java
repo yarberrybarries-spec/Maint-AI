@@ -21,7 +21,7 @@ public class MaintenanceTask implements Serializable {
     @TableId(value = "id", type = IdType.ASSIGN_ID)
     private Long id;
 
-    /** 任务编号 MT-yyyyMMdd-xxx */
+    /** 任务编号 MT-yyyyMMdd-ID；ID 为 IdWorker 生成的雪花 ID 字符串 */
     private String taskNumber;
 
     /** 设备ID（图谱节点ID） */
