@@ -274,3 +274,8 @@ function onSubmitted() {
   margin-top: 4px;
 }
 </style>
+
+
+<style scoped>
+.case-upload{max-width:1050px!important;margin:0 auto!important;padding:0 clamp(18px,4vw,56px) 32px!important}.cu-head h2{font-size:clamp(32px,4vw,52px)!important;letter-spacing:-.05em!important;color:#191919!important}.cu-head p{color:#777!important}.cu-card{background:#fff!important;border:1px solid #ececeb!important;border-radius:20px!important;box-shadow:0 10px 30px rgba(24,24,24,.045)!important;padding:8px!important}.cu-field{padding:22px 16px!important;border-bottom:1px solid #f0f0f0!important}.cu-label{color:#191919!important}.cu-label em{color:#999!important}.cu-actions{padding:22px 16px!important}.cu-actions .el-button{border-radius:999px!important;background:#1f6ed4!important;border-color:#1f6ed4!important}
+</style>

@@ -181,11 +181,11 @@ const filteredList = computed(() => {
 // 根据文件类型返回图标颜色
 function getFileTypeColor(fileType) {
   const type = (fileType || 'pdf').toLowerCase().replace(/^\./, '')
-  if (type === 'pdf') return { bg: '#FEF6EE', accent: '#F97316', label: 'PDF' }
-  if (type === 'docx' || type === 'doc') return { bg: '#F7ECE9', accent: '#A8605F', label: 'WORD' }
+  if (type === 'pdf') return { bg: '#EAF2FF', accent: '#1F6ED4', label: 'PDF' }
+  if (type === 'docx' || type === 'doc') return { bg: '#EEF5FF', accent: '#2F6FBD', label: 'WORD' }
   if (type === 'xlsx' || type === 'xls') return { bg: '#EEF3E6', accent: '#5E8C3E', label: 'EXCEL' }
-  if (type === 'txt') return { bg: '#F4F0E8', accent: '#6B5D4C', label: 'TXT' }
-  return { bg: '#FEF6EE', accent: '#F97316', label: 'FILE' }
+  if (type === 'txt') return { bg: '#F1F6FC', accent: '#466B91', label: 'TXT' }
+  return { bg: '#EAF2FF', accent: '#1F6ED4', label: 'FILE' }
 }
 </script>
 
@@ -212,7 +212,7 @@ function getFileTypeColor(fileType) {
           <el-input
             v-model="searchQuery"
             placeholder="搜索手册名称..."
-            class="search-input"
+            class="knowledge-search-input"
             clearable
             @keyup.enter="handleSearch"
           >
@@ -263,27 +263,27 @@ function getFileTypeColor(fileType) {
                 }"
               >
                 <svg v-if="(item.fileType || 'pdf').toLowerCase().replace(/^\./, '') === 'pdf'" class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 4h24l12 12v44H8V4z" fill="#FEF6EE" stroke="#F97316" stroke-width="1.5"/>
-                  <path d="M28 4v12h12" fill="#F3E8DC" stroke="#F97316" stroke-width="1.5"/>
-                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#F97316" opacity="0.6"/>
-                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#F97316" opacity="0.4"/>
-                  <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#F97316" opacity="0.25"/>
-                  <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#F97316" font-weight="700">PDF</text>
+                  <path d="M8 4h24l12 12v44H8V4z" fill="#EAF2FF" stroke="#1F6ED4" stroke-width="1.5"/>
+                  <path d="M28 4v12h12" fill="#D8E8FA" stroke="#1F6ED4" stroke-width="1.5"/>
+                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#1F6ED4" opacity="0.6"/>
+                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#1F6ED4" opacity="0.4"/>
+                  <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#1F6ED4" opacity="0.25"/>
+                  <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#1F6ED4" font-weight="700">PDF</text>
                 </svg>
                 <svg v-else-if="(item.fileType || 'doc').toLowerCase().replace(/^\./, '').includes('doc')" class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 4h24l12 12v44H8V4z" fill="#F7ECE9" stroke="#A8605F" stroke-width="1.5"/>
-                  <path d="M28 4v12h12" fill="#ECD9D6" stroke="#A8605F" stroke-width="1.5"/>
-                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#A8605F" opacity="0.6"/>
-                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#A8605F" opacity="0.4"/>
-                  <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#A8605F" opacity="0.25"/>
-                  <text x="12" y="22" font-family="sans-serif" font-size="7" fill="#A8605F" font-weight="700">WORD</text>
+                  <path d="M8 4h24l12 12v44H8V4z" fill="#EEF5FF" stroke="#2F6FBD" stroke-width="1.5"/>
+                  <path d="M28 4v12h12" fill="#DCEBFA" stroke="#2F6FBD" stroke-width="1.5"/>
+                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#2F6FBD" opacity="0.6"/>
+                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#2F6FBD" opacity="0.4"/>
+                  <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#2F6FBD" opacity="0.25"/>
+                  <text x="12" y="22" font-family="sans-serif" font-size="7" fill="#2F6FBD" font-weight="700">WORD</text>
                 </svg>
                 <svg v-else class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M8 4h24l12 12v44H8V4z" fill="#F4F0E8" stroke="#B3A692" stroke-width="1.5"/>
-                  <path d="M28 4v12h12" fill="#ECE3D4" stroke="#B3A692" stroke-width="1.5"/>
-                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#B3A692" opacity="0.6"/>
-                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#B3A692" opacity="0.4"/>
-                  <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#6B5D4C" font-weight="700">FILE</text>
+                  <path d="M8 4h24l12 12v44H8V4z" fill="#F1F6FC" stroke="#466B91" stroke-width="1.5"/>
+                  <path d="M28 4v12h12" fill="#E1ECF7" stroke="#466B91" stroke-width="1.5"/>
+                  <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#466B91" opacity="0.6"/>
+                  <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#466B91" opacity="0.4"/>
+                  <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#466B91" font-weight="700">FILE</text>
                 </svg>
               </div>
             </div>
@@ -408,14 +408,16 @@ function getFileTypeColor(fileType) {
 /* ── Search Bar — 悬浮卡片风格 ── */
 .search-bar-wrapper {
   position: relative;
-  z-index: 10;
-  margin-top: -28px;
-  margin-bottom: 28px;
+  z-index: 1;
+  width: 100%;
+  margin-top: 18px;
+  margin-bottom: 24px;
 }
 .search-bar-card {
-  max-width: 640px;
-  margin: 0 auto;
-  background: var(--plaza-bg-card);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  background: #fff;
   border: 1.5px solid var(--plaza-border);
   border-radius: var(--plaza-radius-lg);
   padding: 16px 20px;
@@ -427,14 +429,31 @@ function getFileTypeColor(fileType) {
   box-shadow: 0 0 0 4px var(--plaza-accent-soft), var(--plaza-shadow-organic);
 }
 .search-bar-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
-.search-input {
-  flex: 1;
+.knowledge-search-input {
+  width: 100%;
+  min-width: 0;
+}
+.knowledge-search-input :deep(.el-input__wrapper) {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 1px 11px;
+}
+.knowledge-search-input :deep(.el-input__inner) {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .search-btn {
+  min-width: 84px;
+  white-space: nowrap;
   background: var(--plaza-accent);
   border-color: var(--plaza-accent);
   flex-shrink: 0;
@@ -570,15 +589,15 @@ function getFileTypeColor(fileType) {
 .update-btn {
   flex: 0 0 auto;
   min-width: 70px;
-  background: linear-gradient(135deg, #F59E0B, #D97706);
-  border-color: #F59E0B;
+  background: linear-gradient(135deg, #2f7bd6, #1f6ed4);
+  border-color: #1f6ed4;
   color: #fff;
   padding: 8px 12px;
   font-weight: 500;
 }
 .update-btn:hover {
-  background: linear-gradient(135deg, #D97706, #B45309);
-  border-color: #D97706;
+  background: linear-gradient(135deg, #1f6ed4, #1554ad);
+  border-color: #1554ad;
 }
 .delete-btn {
   flex: 0 0 40px;
@@ -656,14 +675,23 @@ function getFileTypeColor(fileType) {
     width: fit-content;
   }
   .search-bar-inner {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
-  .search-input {
+  .knowledge-search-input {
     min-width: 0;
   }
   .search-btn {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* 搜索独立成整行，避免与页面标题卡片发生覆盖。 */
+.search-bar-wrapper {
+  clear: both;
+}
+.search-bar-card {
+  box-sizing: border-box;
 }
 </style>

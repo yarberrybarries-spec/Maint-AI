@@ -1,44 +1,29 @@
 import { ref } from 'vue'
 
 /**
- * 全局主题切换（换肤）。
- *
- * 原理：全站颜色都走 base.css 的 --plaza- 与 --el- 等 CSS 变量，
- * 切主题 = 在 <html> 上设 data-theme，覆盖那一套变量值，组件零改动。
- * 默认(无 data-theme)= 暖陶土。偏好持久化到 localStorage。
+ * 全局主题初始化。
+ * 现在产品统一使用青灰墨配色，不再提供运行时换色入口。
  */
 
 export const THEMES = [
-  { key: 'warm', name: '暖陶土', color: '#c4602f' },
   { key: 'cool', name: '青灰墨', color: '#2f7488' },
-  { key: 'sage', name: '松石绿', color: '#4f7d3a' },
 ]
 
-const STORAGE_KEY = 'wx_theme'
-const VALID = new Set(THEMES.map((t) => t.key))
+const current = ref('cool')
 
-const current = ref('warm')
-
-/** 把主题应用到 <html>：warm=默认(移除 data-theme)，其它=设 data-theme。 */
-function apply(themeKey) {
-  const key = VALID.has(themeKey) ? themeKey : 'warm'
-  current.value = key
+/** 固定应用唯一的青灰墨主题，清理历史主题偏好。 */
+function apply() {
+  current.value = 'cool'
   const root = document.documentElement
-  if (key === 'warm') root.removeAttribute('data-theme')
-  else root.setAttribute('data-theme', key)
+  root.setAttribute('data-theme', 'cool')
+  try { localStorage.removeItem('wx_theme') } catch (e) { /* ignore */ }
 }
 
-/** 应用启动时调用：从 localStorage 恢复主题（在 mount 前调用避免闪烁）。 */
+/** 应用启动时调用，在 mount 前固定主题以避免首屏闪烁。 */
 export function initTheme() {
-  let saved = 'warm'
-  try { saved = localStorage.getItem(STORAGE_KEY) || 'warm' } catch (e) { /* ignore */ }
-  apply(saved)
+  apply()
 }
 
 export function useTheme() {
-  function setTheme(themeKey) {
-    apply(themeKey)
-    try { localStorage.setItem(STORAGE_KEY, current.value) } catch (e) { /* ignore */ }
-  }
-  return { current, themes: THEMES, setTheme }
+  return { current, themes: THEMES, setTheme: apply }
 }

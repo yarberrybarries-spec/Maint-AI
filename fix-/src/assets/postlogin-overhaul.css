@@ -1,0 +1,257 @@
+/* Post-login visual system: one bright OPPO-inspired language across every authenticated screen. */
+
+/* Inputs share the same border-first focus treatment on login and authenticated pages. */
+:is(.el-input__wrapper, .el-textarea__inner, .el-select__wrapper) {
+  border: 1px solid #e8e8e6 !important;
+  box-shadow: none !important;
+  background: #fff !important;
+}
+:is(.el-input__wrapper.is-focus, .el-textarea__inner:focus, .el-select__wrapper.is-focused, .el-select__wrapper:focus-within) {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.12) !important;
+  outline: none !important;
+}
+:is(.el-input__wrapper, .el-textarea__inner, .el-select__wrapper) :is(input, textarea) {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+:is(body .login-input .el-input__wrapper, body .forgot-input .el-input__wrapper, body .code-input .el-input__wrapper) {
+  border: 1px solid #e8e8e6 !important;
+  box-shadow: none !important;
+  background: #fff !important;
+}
+:is(body .login-input .el-input.is-focus .el-input__wrapper, body .forgot-input .el-input.is-focus .el-input__wrapper, body .code-input .el-input.is-focus .el-input__wrapper) {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.14) !important;
+}
+:is(.login-input, .forgot-input, .code-input) :is(input, textarea) {
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) {
+  --plaza-bg: #f7f7f5;
+  --plaza-bg-card: #ffffff;
+  --plaza-bg-input: #fafafa;
+  --plaza-accent: #1f6ed4;
+  --plaza-accent-hover: #1554ad;
+  --plaza-accent-soft: #eaf2ff;
+  --plaza-accent-soft-strong: #c9daf2;
+  --plaza-heading: #1b1b1b;
+  --plaza-text: #4e4e4e;
+  --plaza-text-muted: #999;
+  --plaza-border: #e8e8e6;
+  --plaza-border-strong: #ddd;
+  --plaza-radius: 16px;
+  --plaza-radius-lg: 22px;
+  --plaza-shadow-organic: 0 10px 30px rgba(20, 20, 20, .05);
+  --font-display: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* 统一蓝色边框与输入聚焦状态：输入框本体变蓝，不再使用 Element Plus 内阴影。 */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(.el-input__wrapper, .el-textarea__inner, .el-select__wrapper) {
+  border: 1px solid #e8e8e6 !important;
+  box-shadow: none !important;
+  background: #fff !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(.el-input__wrapper.is-focus, .el-textarea__inner:focus, .el-select__wrapper.is-focused, .el-select__wrapper:focus-within) {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.12) !important;
+  outline: none !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(input, textarea, select) {
+  box-shadow: none !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(input, textarea, select):focus {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.12) !important;
+  outline: none !important;
+}
+/* AI 对话输入区不显示输入框自身的聚焦描边，避免出现局部蓝色矩形。 */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .ai-composer textarea:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(.vivo-user-search, .vivo-admin-search, .search-input-row, .hero-search, .assistant-input, .vivo-assistant-input) input:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Native composite search fields: focus the whole field, never the inner text node. */
+:is(.vivo-user-shell, .vivo-admin-shell, .neo-shell) :is(
+  .vivo-user-search,
+  .vivo-admin-search,
+  .search-input-row,
+  .hero-search,
+  .assistant-input,
+  .vivo-assistant-input,
+  .task-search,
+  .search-bar-card,
+  .history-search,
+  .code-input-wrapper
+) {
+  border: 1px solid #dbe7f5 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+:is(.vivo-user-shell, .vivo-admin-shell, .neo-shell) :is(
+  .vivo-user-search,
+  .vivo-admin-search,
+  .search-input-row,
+  .hero-search,
+  .assistant-input,
+  .vivo-assistant-input,
+  .task-search,
+  .search-bar-card,
+  .history-search,
+  .code-input-wrapper
+):focus-within {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.14) !important;
+}
+:is(.vivo-user-shell, .vivo-admin-shell, .neo-shell) :is(
+  .vivo-user-search,
+  .vivo-admin-search,
+  .search-input-row,
+  .hero-search,
+  .assistant-input,
+  .vivo-assistant-input,
+  .task-search,
+  .search-bar-card,
+  .history-search,
+  .code-input-wrapper
+) input {
+  border: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  outline: none !important;
+}
+
+/* 清理旧的暖橙装饰边框，统一为当前蓝色体系。 */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(
+  .search-box,
+  .search-input-row,
+  .search-tabs,
+  .hot-row button,
+  .footer-actions button,
+  .chapter-tools button.active,
+  .hero-panel,
+  .hero-search,
+  .visual-caption,
+  .assistant-input,
+  .assistant-chips button,
+  .vivo-assistant-panel,
+  .vivo-chip-list button,
+  .vivo-assistant-input
+) {
+  border-color: #dbe7f5 !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(
+  .hot-row button,
+  .footer-actions button,
+  .assistant-chips button,
+  .vivo-chip-list button
+) {
+  color: #1f6ed4 !important;
+}
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-button--primary,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-button--danger { --el-button-bg-color: #1f6ed4; --el-button-border-color: #1f6ed4; --el-button-hover-bg-color: #1554ad; --el-button-hover-border-color: #1554ad; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-input__wrapper,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-textarea__inner,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-select__wrapper { border-radius: 11px; border: 1px solid #e8e8e6; box-shadow: none; background: #fff; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-input__wrapper.is-focus,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-textarea__inner:focus { border-color: #1f6ed4; box-shadow: 0 0 0 3px rgba(31,110,212,.12); }
+
+/* Legacy authenticated screens inherit the same light canvas and card language. */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page { min-height: calc(100vh - 72px); background: #f7f7f5 !important; color: #1b1b1b !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page { padding: clamp(28px, 5vw, 64px) clamp(18px, 5vw, 72px) 70px !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(.profile-card,.profile-panel,.security-card,.identity-card,.section-card,.form-card),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(.quiz-card,.quiz-panel,.question-card,.result-card),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(.cu-card,.upload-card,.case-card),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(.search-bar-card,.result-card,.result-item,.state-empty),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(.command-card,.task-card,.step-card,.panel),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(.kg-card,.graph-card,.panel) { border-color: #e8e8e6 !important; background: #fff !important; box-shadow: 0 10px 30px rgba(20,20,20,.045) !important; border-radius: 18px !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(h1,h2,h3),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(h1,h2,h3),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(h1,h2,h3),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(h1,h2,h3),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(h1,h2,h3),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(h1,h2,h3) { color: #1b1b1b !important; letter-spacing: -.04em; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(.eyebrow,.section-label,.muted,.meta),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(.eyebrow,.section-label,.muted,.meta),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(.eyebrow,.section-label,.muted,.meta),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(.eyebrow,.section-label,.muted,.meta),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(.eyebrow,.section-label,.muted,.meta),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(.eyebrow,.section-label,.muted,.meta) { color: #999 !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(button.primary,.primary-btn,.save-btn),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(button.primary,.primary-btn,.submit-btn),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(button.primary,.primary-btn,.submit-btn),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(button.primary,.primary-btn,.search-btn),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(button.primary,.primary-btn,.action-btn),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(button.primary,.primary-btn,.action-btn) { background: #1f6ed4 !important; border-color: #1f6ed4 !important; color: #fff !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(button.primary,.primary-btn,.save-btn):hover,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(button.primary,.primary-btn,.submit-btn):hover,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(button.primary,.primary-btn,.submit-btn):hover,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(button.primary,.primary-btn,.search-btn):hover,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(button.primary,.primary-btn,.action-btn):hover,
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(button.primary,.primary-btn,.action-btn):hover { background: #1554ad !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page :is(a,.link,.text-action),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap :is(a,.link,.text-action),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload :is(a,.link,.text-action),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result :is(a,.link,.text-action),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console :is(a,.link,.text-action),
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page :is(a,.link,.text-action) { color: #1f6ed4 !important; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .el-tag { border-radius: 99px; }
+
+/* Search actions keep their label centered even when an icon or loading state is present. */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) :is(
+  .search-input-row button,
+  .search-submit,
+  .search-btn,
+  .el-button--primary
+) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+/* AI screen gets a dedicated light workstation frame without changing chat logic. */
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame { min-height: calc(100vh - 72px); padding: 32px clamp(18px, 5vw, 72px) 46px; background: #f7f7f5; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-head { max-width: 1320px; margin: 0 auto 18px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-head h1 { margin: 0; color: #1b1b1b; font-size: clamp(30px, 4vw, 48px); letter-spacing: -.06em; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-head p { margin: 10px 0 0; color: #888; font-size: 13px; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-kicker { margin-bottom: 10px; color: #aaa; font: 700 10px ui-monospace, monospace; letter-spacing: .16em; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-status { padding: 8px 11px; border: 1px solid #e8e8e6; border-radius: 99px; color: #58a276; background: #fff; font-size: 11px; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-status i { display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #58a276; }
+:is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-body { max-width: 1320px; min-height: 720px; margin: 0 auto; overflow: hidden; border: 1px solid #e8e8e6; border-radius: 30px; background: #fff; box-shadow: 0 12px 34px rgba(20,20,20,.05); }
+
+@media (max-width: 700px) {
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .user-profile-page,
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .quiz-wrap,
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .case-upload,
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .search-result,
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .task-console,
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .kg-page { padding: 28px 16px 50px !important; }
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame { padding: 26px 16px 40px; }
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-body { min-height: 640px; border-radius: 24px; }
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-head { display: block; }
+  :is(.neo-shell, .vivo-user-shell, .vivo-admin-shell) .neo-ai-frame .ai-frame-status { display: inline-block; margin-top: 16px; }
+}
+
+
+
+

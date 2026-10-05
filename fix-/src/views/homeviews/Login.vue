@@ -75,10 +75,6 @@ const handleSubmit = async () => {
   })
 }
 
-const goToLanding = () => {
-  router.push('/')
-}
-
 const goToForgotPassword = () => {
   router.push('/forgot-password')
 }
@@ -200,12 +196,6 @@ const goToForgotPassword = () => {
             </div>
           </el-form>
 
-          <div class="card-footer">
-            <span class="back-home" @click="goToLanding">
-              <el-icon class="back-icon"><ArrowRight /></el-icon>
-              返回首页
-            </span>
-          </div>
         </div>
       </div>
     </div>
@@ -214,6 +204,15 @@ const goToForgotPassword = () => {
 
 <style scoped>
 .login-page {
+  /* 与用户端 vivo 蓝色主题保持一致，覆盖登录页旧的青灰强调色。 */
+  --plaza-accent: #1f6ed4;
+  --plaza-accent-hover: #1554ad;
+  --plaza-accent-soft: rgba(31, 110, 212, 0.11);
+  --plaza-accent-soft-strong: rgba(31, 110, 212, 0.20);
+  --plaza-accent-grad: linear-gradient(135deg, #4a8fe4 0%, #1f6ed4 55%, #1554ad 100%);
+  --plaza-atmosphere-a: rgba(74, 143, 228, 0.13);
+  --plaza-atmosphere-b: rgba(31, 110, 212, 0.08);
+  --plaza-atmosphere-c: rgba(21, 84, 173, 0.06);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -461,7 +460,7 @@ const goToForgotPassword = () => {
 .login-input :deep(.el-input__wrapper) {
   border-radius: 10px;
   padding-left: 44px;
-  background: var(--plaza-bg-input) !important;
+  background: #fff !important;
   border: 1px solid var(--plaza-border);
   box-shadow: none !important;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -545,33 +544,6 @@ const goToForgotPassword = () => {
 
 .btn-login :deep(.el-icon.is-loading) {
   font-size: clamp(14px, 1.8vw, 18px);
-}
-
-/* Card Footer */
-.card-footer {
-  margin-top: clamp(16px, 2vw, 24px);
-  padding-top: clamp(14px, 2vw, 20px);
-  border-top: 1px solid var(--plaza-border);
-  text-align: center;
-}
-
-.back-home {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: clamp(12px, 1.5vw, 14px);
-  color: var(--plaza-text-muted);
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.back-home:hover {
-  color: var(--plaza-accent);
-}
-
-.back-icon {
-  transform: rotate(180deg);
-  font-size: clamp(12px, 1.4vw, 14px);
 }
 
 /* Responsive */

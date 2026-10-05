@@ -467,13 +467,13 @@ function handleClose() {
 }
 
 .dialog-footer .el-button--primary {
-  background: linear-gradient(135deg, #F59E0B, #D97706);
-  border-color: #F59E0B;
+  background: linear-gradient(135deg, #2f7bd6, #1f6ed4);
+  border-color: #1f6ed4;
   color: #fff;
   font-weight: 500;
 }
 .dialog-footer .el-button--primary:hover {
-  background: linear-gradient(135deg, #D97706, #B45309);
-  border-color: #D97706;
+  background: linear-gradient(135deg, #1f6ed4, #1554ad);
+  border-color: #1554ad;
 }
 </style>

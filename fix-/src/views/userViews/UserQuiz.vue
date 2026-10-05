@@ -526,7 +526,7 @@ watch(generating, (g) => {
   align-items: flex-start; gap: 10px; transition: box-shadow .2s, transform .2s;
 }
 .mode-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,.08); transform: translateY(-2px); }
-.mode-card.busy { box-shadow: 0 0 0 2px var(--signal-soft, rgba(255,138,0,.15)); }
+.mode-card.busy { box-shadow: 0 0 0 2px var(--signal-soft, rgba(31,110,212,.15)); }
 .mc-icon {
   width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center;
   font-weight: 800; font-size: 17px; color: #fff;
@@ -579,7 +579,7 @@ watch(generating, (g) => {
 .q-card.result.bad { border-left: 4px solid #cf1322; }
 .q-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .q-idx {
-  width: 24px; height: 24px; border-radius: 7px; background: var(--signal-soft, rgba(255,138,0,.12));
+  width: 24px; height: 24px; border-radius: 7px; background: var(--signal-soft, rgba(31,110,212,.12));
   color: var(--signal, #ff8a00); font-weight: 700; font-size: 13px; display: grid; place-items: center;
 }
 .q-topic { max-width: 240px; }
@@ -609,7 +609,7 @@ watch(generating, (g) => {
 }
 .explain-tag, .src-tag {
   display: inline-block; font-size: 11px; font-weight: 700; color: var(--signal, #ff8a00);
-  background: var(--signal-soft, rgba(255,138,0,.12)); padding: 1px 7px; border-radius: 5px; margin-right: 8px;
+  background: var(--signal-soft, rgba(31,110,212,.12)); padding: 1px 7px; border-radius: 5px; margin-right: 8px;
 }
 .sources { margin-top: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 

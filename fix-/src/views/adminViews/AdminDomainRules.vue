@@ -34,7 +34,7 @@ const route = useRoute()
 
 const STATUS = {
   draft: { label: '草稿', type: 'info', color: 'var(--plaza-text-muted)', bar: 'var(--plaza-text-muted)' },
-  pending: { label: '待审核', type: 'warning', color: '#b7791f', bar: '#f59e0b' },
+  pending: { label: '待审核', type: 'warning', color: '#1f6ed4', bar: '#1f6ed4' },
   active: { label: '已发布', type: 'success', color: 'var(--plaza-accent)', bar: 'var(--plaza-accent)' },
   disabled: { label: '已禁用', type: 'info', color: '#64748b', bar: '#94a3b8' },
   rejected: { label: '已驳回', type: 'danger', color: '#dc2626', bar: '#ef4444' },
@@ -970,7 +970,7 @@ onMounted(async () => {
 }
 
 .stat-bar.draft { background: var(--plaza-text-muted); }
-.stat-bar.pending { background: #f59e0b; }
+.stat-bar.pending { background: #1f6ed4; }
 .stat-bar.active { background: var(--plaza-accent); }
 .stat-bar.rejected { background: #ef4444; }
 .stat-bar.disabled { background: #94a3b8; }

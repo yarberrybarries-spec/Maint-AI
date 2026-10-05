@@ -117,11 +117,11 @@ function formatDate(dateStr) {
 
 function getFileTypeColor(fileType) {
   const type = (fileType || 'pdf').toLowerCase().replace(/^\./, '')
-  if (type === 'pdf') return { bg: '#FEF6EE', accent: '#F97316', label: 'PDF' }
-  if (type === 'docx' || type === 'doc') return { bg: '#F7ECE9', accent: '#A8605F', label: 'WORD' }
+  if (type === 'pdf') return { bg: '#EAF2FF', accent: '#1F6ED4', label: 'PDF' }
+  if (type === 'docx' || type === 'doc') return { bg: '#EEF5FF', accent: '#2F6FBD', label: 'WORD' }
   if (type === 'xlsx' || type === 'xls') return { bg: '#EEF3E6', accent: '#5E8C3E', label: 'EXCEL' }
-  if (type === 'txt') return { bg: '#F4F0E8', accent: '#6B5D4C', label: 'TXT' }
-  return { bg: '#FEF6EE', accent: '#F97316', label: 'FILE' }
+  if (type === 'txt') return { bg: '#F1F6FC', accent: '#466B91', label: 'TXT' }
+  return { bg: '#EAF2FF', accent: '#1F6ED4', label: 'FILE' }
 }
 
 // 监听路由 query 变化（支持浏览器前进后退）
@@ -189,27 +189,27 @@ watch(() => route.query.keyword, (newVal) => {
                   }"
                 >
                   <svg v-if="(item.fileType || 'pdf').toLowerCase().replace(/^\./, '') === 'pdf'" class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 4h24l12 12v44H8V4z" fill="#FEF6EE" stroke="#F97316" stroke-width="1.5"/>
-                    <path d="M28 4v12h12" fill="#F3E8DC" stroke="#F97316" stroke-width="1.5"/>
-                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#F97316" opacity="0.6"/>
-                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#F97316" opacity="0.4"/>
-                    <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#F97316" opacity="0.25"/>
-                    <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#F97316" font-weight="700">PDF</text>
+                    <path d="M8 4h24l12 12v44H8V4z" fill="#EAF2FF" stroke="#1F6ED4" stroke-width="1.5"/>
+                    <path d="M28 4v12h12" fill="#D8E8FA" stroke="#1F6ED4" stroke-width="1.5"/>
+                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#1F6ED4" opacity="0.6"/>
+                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#1F6ED4" opacity="0.4"/>
+                    <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#1F6ED4" opacity="0.25"/>
+                    <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#1F6ED4" font-weight="700">PDF</text>
                   </svg>
                   <svg v-else-if="(item.fileType || 'doc').toLowerCase().replace(/^\./, '').includes('doc')" class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 4h24l12 12v44H8V4z" fill="#F7ECE9" stroke="#A8605F" stroke-width="1.5"/>
-                    <path d="M28 4v12h12" fill="#ECD9D6" stroke="#A8605F" stroke-width="1.5"/>
-                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#A8605F" opacity="0.6"/>
-                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#A8605F" opacity="0.4"/>
-                    <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#A8605F" opacity="0.25"/>
-                    <text x="12" y="22" font-family="sans-serif" font-size="7" fill="#A8605F" font-weight="700">WORD</text>
+                    <path d="M8 4h24l12 12v44H8V4z" fill="#EEF5FF" stroke="#2F6FBD" stroke-width="1.5"/>
+                    <path d="M28 4v12h12" fill="#DCEBFA" stroke="#2F6FBD" stroke-width="1.5"/>
+                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#2F6FBD" opacity="0.6"/>
+                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#2F6FBD" opacity="0.4"/>
+                    <rect x="14" y="40" width="18" height="3" rx="1.5" fill="#2F6FBD" opacity="0.25"/>
+                    <text x="12" y="22" font-family="sans-serif" font-size="7" fill="#2F6FBD" font-weight="700">WORD</text>
                   </svg>
                   <svg v-else class="file-icon-svg" viewBox="0 0 48 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 4h24l12 12v44H8V4z" fill="#F4F0E8" stroke="#B3A692" stroke-width="1.5"/>
-                    <path d="M28 4v12h12" fill="#ECE3D4" stroke="#B3A692" stroke-width="1.5"/>
-                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#B3A692" opacity="0.6"/>
-                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#B3A692" opacity="0.4"/>
-                    <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#6B5D4C" font-weight="700">FILE</text>
+                    <path d="M8 4h24l12 12v44H8V4z" fill="#F1F6FC" stroke="#466B91" stroke-width="1.5"/>
+                    <path d="M28 4v12h12" fill="#E1ECF7" stroke="#466B91" stroke-width="1.5"/>
+                    <rect x="14" y="26" width="20" height="3" rx="1.5" fill="#466B91" opacity="0.6"/>
+                    <rect x="14" y="33" width="16" height="3" rx="1.5" fill="#466B91" opacity="0.4"/>
+                    <text x="16" y="22" font-family="sans-serif" font-size="8" fill="#466B91" font-weight="700">FILE</text>
                   </svg>
                 </div>
               </div>
@@ -391,4 +391,11 @@ watch(() => route.query.keyword, (newVal) => {
   display: flex;
   justify-content: center;
 }
+</style>
+
+<style scoped>
+.search-result{max-width:1280px!important;margin:0 auto!important;padding:clamp(24px,4vw,56px)!important}.search-bar-card,.book-card{background:#fff!important;border:1px solid #ececeb!important;border-radius:18px!important;box-shadow:0 10px 30px rgba(24,24,24,.045)!important}.search-btn{border-radius:999px!important;background:#1f6ed4!important;border-color:#1f6ed4!important}.book-card{transition:.2s!important}.book-card:hover{transform:translateY(-4px);box-shadow:0 18px 36px rgba(24,24,24,.1)!important}.book-cover{background:#f5f9ff!important}.results-count{color:#777!important}
+</style>
+<style scoped>
+.search-result{background:#f7f7f5!important}.search-result .search-bar-card,.search-result .book-card{background:#fff!important;border-color:#ececeb!important;box-shadow:0 10px 28px rgba(0,0,0,.045)!important}.search-result .search-btn{background:#1f6ed4!important;border-color:#1f6ed4!important}.search-result .search-btn:hover{background:#1554ad!important}.search-result .book-card:hover{border-color:#9fc1ea!important;transform:translateY(-4px)}.search-result .book-cover{background:#eaf2ff!important}.search-result .back-btn{color:#1f6ed4!important}
 </style>

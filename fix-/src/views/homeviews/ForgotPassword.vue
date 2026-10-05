@@ -503,7 +503,7 @@ const goBack = () => {
 .code-input-wrapper {
   display: flex;
   align-items: stretch;
-  background: var(--plaza-bg-input);
+  background: #fff;
   border: 1px solid var(--plaza-border);
   border-radius: 10px;
   overflow: hidden;
@@ -593,7 +593,7 @@ const goBack = () => {
 .forgot-input :deep(.el-input__wrapper) {
   border-radius: 10px;
   padding-left: 16px;
-  background: var(--plaza-bg-input) !important;
+  background: #fff !important;
   border: 1px solid var(--plaza-border);
   box-shadow: none !important;
   transition: box-shadow 0.2s ease, border-color 0.2s ease;

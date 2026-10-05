@@ -1159,3 +1159,8 @@ onBeforeUnmount(() => {
   .profile-field em { display: none; }
 }
 </style>
+
+
+<style scoped>
+.admin-profile-page{max-width:1180px!important;margin:0 auto!important;padding:clamp(24px,4vw,56px)!important}.profile-head,.profile-panel,.identity-console,.contact-view{background:#fff!important;border-color:#ececeb!important;box-shadow:0 10px 30px rgba(24,24,24,.045)!important;border-radius:20px!important}.profile-head h1{font-size:clamp(32px,4vw,52px)!important;color:#191919!important}.identity-console{background:linear-gradient(135deg,#f5f9ff,#fff 68%)!important}.avatar,.avatar-shell{background:#eaf2ff!important;color:#1f6ed4!important;border-color:#c9daf2!important}.edit-trigger{border-radius:999px!important;color:#1f6ed4!important;border-color:#1f6ed4!important}.identity-status,.head-status{background:#eaf2ff!important;color:#1554ad!important;border-color:#c9daf2!important}
+</style>

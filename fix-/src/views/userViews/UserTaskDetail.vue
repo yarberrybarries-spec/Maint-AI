@@ -927,7 +927,7 @@ onUnmounted(() => {
 .case-status { flex-shrink: 0; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; color: var(--plaza-accent); background: var(--plaza-accent-soft); }
 .case-status.approved { color: #5e8c3e; background: var(--plaza-success-soft); }
 .case-status.rejected { color: var(--plaza-danger); background: var(--plaza-danger-soft); }
-.review-comment { margin-top: 8px; padding: 8px; border-radius: 8px; background: var(--plaza-warning-soft); color: #b45309; font-size: 12px; line-height: 1.5; }
+.review-comment { margin-top: 8px; padding: 8px; border-radius: 8px; background: var(--plaza-warning-soft); color: #1f6ed4; font-size: 12px; line-height: 1.5; }
 
 @media (max-width: 1280px) {
   .task-command { grid-template-columns: minmax(0, 1fr) 350px; }
@@ -954,5 +954,104 @@ onUnmounted(() => {
 @media (prefers-reduced-motion: reduce) {
   .status-spinner, .state-spinner { animation: none; }
   .back-button { transition: none; }
+}
+</style>
+
+
+<style scoped>
+.task-console{max-width:1280px!important;margin:0 auto!important;padding:clamp(24px,4vw,56px)!important;background:#f7f7f5!important}.task-command,.command-readout,.workflow,.resolution-summary,.flow-board,.step-list-shell{background:#fff!important;border:1px solid #ececeb!important;border-radius:20px!important;box-shadow:0 10px 30px rgba(24,24,24,.045)!important}.command-primary{background:#1f6ed4!important;border-color:#1f6ed4!important;color:#fff!important;border-radius:999px!important}.progress-dial::before{background:#fff!important;box-shadow:inset 0 0 0 1px #ececeb!important}.progress-dial::after{border-color:#1f6ed4!important}.status-badge,.urgency-badge{border-radius:999px!important;background:#eaf2ff!important;color:#1554ad!important}.section-kicker,.flow-kicker{color:#1f6ed4!important}
+
+/* 任务详情页增强文字对比度：白色卡片上的说明文字不再发灰，避免信息难以辨认。 */
+.task-command .task-number { color:#596579!important; border-color:#dfe5ee!important; background:#f5f8fc!important; }
+.task-command .command-eyebrow { color:#1f6ed4!important; font-size:10px!important; }
+.task-command .command-copy h1 { color:#172033!important; font-size:clamp(30px,3vw,42px)!important; }
+.task-command .command-copy > p { color:#3f4b5f!important; font-size:15px!important; line-height:1.75!important; }
+.task-command .command-meta span { color:#4b5563!important; font-size:12px!important; }
+.task-command .command-meta .el-icon { color:#1f6ed4!important; }
+.task-command .progress-dial span { color:#667085!important; }
+.task-command .progress-dial span b { color:#111827!important; font-weight:800!important; }
+.task-command .progress-copy > span { color:#667085!important; font-size:10px!important; }
+.task-command .progress-copy small,
+.task-command .readout-grid small { color:#667085!important; font-size:10px!important; }
+.task-command .readout-grid b { color:#1f2937!important; font-size:13px!important; }
+.task-console .workflow-summary,
+.task-console .workflow-heading > div:first-child > span { color:#596579!important; }
+.task-console .fn-label { color:#596579!important; font-size:12px!important; }
+.task-console .state-strip small,
+.task-console .resolution-summary dt,
+.task-console .extraction-note { color:#596579!important; }
+
+/* 工作区横向展开：让右侧 AI 助手的边框完整落在页面可用区域内。 */
+.task-console {
+  width: 100%!important;
+  max-width: none!important;
+  box-sizing: border-box!important;
+  padding-right: 18px!important;
+  padding-left: 18px!important;
+}
+.task-console .work-grid {
+  width: 100%!important;
+  min-width: 0!important;
+  grid-template-columns: minmax(0,1fr) minmax(320px,360px)!important;
+  gap: 18px!important;
+}
+.task-console .assistant-column,
+.task-console .assistant-panel {
+  width: 100%!important;
+  min-width: 0!important;
+  max-width: 100%!important;
+  box-sizing: border-box!important;
+}
+
+/* 外框包住完整工作区，内部步骤卡片与助手卡片各自保留安全间距。 */
+.task-console .workflow {
+  width: calc(100% + 36px)!important;
+  margin-right: -18px!important;
+  margin-left: -18px!important;
+  padding: 18px!important;
+  box-sizing: border-box!important;
+}
+
+@media (max-width:1280px) {
+  .task-console .work-grid { grid-template-columns:minmax(0,1fr) minmax(320px,360px)!important; }
+}
+
+@media (max-width:1080px) {
+  .task-console .workflow {
+    width: 100%!important;
+    margin-right: 0!important;
+    margin-left: 0!important;
+    padding: 0!important;
+  }
+  .task-console .work-grid { grid-template-columns:1fr!important; }
+}
+
+/* 流程节点使用连续连接线，清楚表达步骤先后关系。 */
+.task-console .flow-rail {
+  align-items: flex-start;
+  gap: 6px;
+}
+.task-console .flow-node {
+  position: relative;
+  z-index: 1;
+}
+.task-console .flow-node:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 21px;
+  left: calc(50% + 17px);
+  width: 64px;
+  height: 2px;
+  border-radius: 999px;
+  background: #dbe7f5;
+}
+.task-console .flow-node.done:not(:last-child)::after,
+.task-console .flow-node.active:not(:last-child)::after,
+.task-console .flow-node.verifying:not(:last-child)::after {
+  background: #1f6ed4;
+}
+.task-console .flow-node .fn-dot::after {
+  display: none;
 }
 </style>

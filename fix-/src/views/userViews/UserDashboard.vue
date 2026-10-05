@@ -155,7 +155,7 @@ onMounted(() => {
       .from('.hero', { y: 26, autoAlpha: 0, duration: 0.6 }, '-=0.3')
       .from('.holo', { scale: 0.7, autoAlpha: 0, duration: 0.7, ease: 'back.out(1.5)' }, '-=0.4')
       .from('.diag-node', { autoAlpha: 0, scale: 0.8, duration: 0.45, stagger: 0.08 }, '-=0.4')
-      .from('.col-right > .card', { x: 26, autoAlpha: 0, duration: 0.55, stagger: 0.12 }, '-=0.5')
+      .from('.secondary-column > .card', { x: 26, autoAlpha: 0, duration: 0.55, stagger: 0.12 }, '-=0.5')
       .from('.flow-col', { y: 20, autoAlpha: 0, duration: 0.45, stagger: 0.08 }, '-=0.4')
 
     // 指标数字滚动由 loadOverview 在拿到真实值后触发（0→真实值），
@@ -189,523 +189,64 @@ onBeforeUnmount(() => {
   ctx && ctx.revert()
 })
 </script>
-
 <template>
-  <div ref="rootRef" class="user-dashboard">
-    <span class="hero-kicker">检修智脑 · MAINTENANCE&nbsp;CONSOLE · 欢迎回来，{{ userName }}</span>
-
-    <div class="dash">
-      <!-- ================= 左列 ================= -->
-      <div class="col-left">
-        <!-- 顶部指标 -->
-        <div class="stats">
-          <button
-            v-for="s in stats"
-            :key="s.key"
-            class="dash-stat"
-            :class="s.tone"
-            @click="go(s.to)"
-          >
-            <div class="stat-top">
-              <span class="stat-ico"><el-icon><component :is="s.icon" /></el-icon></span>
-              <span class="stat-val">
-                {{ s.decimals ? s.display.toFixed(1) : Math.round(s.display) }}<i>{{ s.suffix }}</i>
-              </span>
-            </div>
-            <span class="stat-label">{{ s.label }}</span>
-            <svg class="stat-spark" viewBox="0 0 72 22" preserveAspectRatio="none">
-              <path :d="s.spark" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- AI 检修 主面板 -->
-        <section class="hero">
-          <header class="hero-head">
-            <h2 class="hero-title"><span class="bar" />智能检索</h2>
-            <span class="hero-tag">INTELLIGENT&nbsp;RETRIEVAL</span>
-          </header>
-
-          <div class="hero-body">
-            <!-- 表单 -->
-            <div class="form">
-              <label class="f-label">诊断目标</label>
-              <div class="f-select">
-                <input v-model="target" />
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-
-              <label class="f-label">问题描述</label>
-              <div class="f-area">
-                <textarea v-model="problem" maxlength="300" placeholder="请输入设备异常现象或粘贴告警信息..." />
-                <span class="f-count">{{ problem.length }}/300</span>
-              </div>
-
-              <label class="f-label">数据范围</label>
-              <div class="f-select">
-                <input v-model="range" />
-                <el-icon><ArrowRight /></el-icon>
-              </div>
-
-              <button class="f-go" @click="startDiagnose">
-                <span class="tri">▶</span> 开始智能检索
-              </button>
-            </div>
-
-            <!-- 3D 全息检修台 + 功能节点 -->
-            <div class="diagram">
-              <svg class="links" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path class="flow-line" d="M19,20 L50,50" />
-                <path class="flow-line" d="M17,50 L50,50" />
-                <path class="flow-line" d="M19,80 L50,50" />
-                <path class="flow-line" d="M81,20 L50,50" />
-                <path class="flow-line" d="M83,50 L50,50" />
-                <path class="flow-line" d="M81,80 L50,50" />
-              </svg>
-
-              <div class="holo">
-                <div ref="platformRef" class="holo-platform">
-                  <span class="ring r1" />
-                  <span class="ring r2" />
-                  <span class="ring r3" />
-                  <span class="hub" />
-                </div>
-                <div ref="coreRef" class="holo-core" @pointerdown.prevent="onPointerDown">
-                  <svg viewBox="0 0 160 160" class="bench">
-                    <defs>
-                      <linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0" style="stop-color: var(--plaza-accent)" />
-                        <stop offset="1" style="stop-color: var(--plaza-accent-hover)" />
-                      </linearGradient>
-                    </defs>
-                    <!-- 显示器机身 -->
-                    <path class="bn-fill" d="M40,34 L120,34 L120,92 L40,92 Z" />
-                    <path class="bn-line" d="M40,34 L120,34 L120,92 L40,92 Z" />
-                    <!-- 屏幕 -->
-                    <path class="bn-line" d="M47,41 L113,41 L113,85 L47,85 Z" />
-                    <polyline class="bn-wave" points="53,73 62,73 67,57 74,79 80,65 87,75 94,51 100,69 107,69" />
-                    <!-- 支架与底座 -->
-                    <path class="bn-line" d="M80,92 L80,104" />
-                    <path class="bn-fill" d="M62,112 L98,112 L93,104 L67,104 Z" />
-                    <path class="bn-line" d="M62,112 L98,112 L93,104 L67,104 Z" />
-                    <!-- 键盘 -->
-                    <path class="bn-fill" d="M46,120 L114,120 L122,134 L38,134 Z" />
-                    <path class="bn-line" d="M46,120 L114,120 L122,134 L38,134 Z" />
-                    <path class="bn-line" d="M51,124 L61,124 M65,124 L75,124 M79,124 L89,124 M93,124 L103,124 M107,124 L113,124 M44,129 L116,129" />
-                    <!-- 电源指示灯 -->
-                    <circle class="bn-fill2" cx="80" cy="88" r="2.2" />
-                  </svg>
-                  <span class="core-glow" />
-                </div>
-                <span class="holo-hint">拖拽可旋转</span>
-              </div>
-
-              <router-link
-                v-for="n in nodes"
-                :key="n.label"
-                :to="n.to"
-                class="diag-node"
-                :class="[n.side === 'l' ? 'left' : 'right', 's' + n.slot]"
-              >
-                <span class="dn-ico"><el-icon><component :is="n.icon" /></el-icon></span>
-                <span class="dn-text">
-                  <span class="dn-label">{{ n.label }}</span>
-                  <span class="dn-sub">{{ n.sub }}</span>
-                </span>
-              </router-link>
-            </div>
-          </div>
-        </section>
-
-        <!-- 检修任务流转 -->
-        <section class="card flow-card">
-          <header class="card-head">
-            <h3 class="card-title"><span class="bar" />检修任务</h3>
-            <router-link to="/user/tasks" class="more">更多 <el-icon><ArrowRight /></el-icon></router-link>
-          </header>
-          <div class="flow">
-            <div class="flow-track"><span class="flow-fill" /></div>
-            <div class="flow-cols">
-              <router-link
-                v-for="(t, i) in taskFlow"
-                :key="t.status"
-                to="/user/tasks"
-                class="flow-col"
-              >
-                <span class="flow-dot" :class="t.tone"><i /></span>
-                <div class="flow-stat" :class="t.tone">
-                  <span class="fc-head">
-                    <span class="fc-label">{{ t.label }}</span>
-                    <span class="fc-count">{{ t.count }}</span>
-                  </span>
-                  <span class="fc-sub">{{ t.sub || '当前数量' }}</span>
-                </div>
-              </router-link>
-            </div>
-          </div>
-        </section>
+  <div ref="rootRef" class="neo-dashboard">
+    <section class="dash-intro">
+      <div>
+        <span class="dash-kicker">FIELD OPERATIONS / {{ new Date().toLocaleDateString('zh-CN') }}</span>
+        <h1>把复杂检修，<em>变得更清楚。</em></h1>
+        <p>欢迎回来，{{ userName }}。今天从一个明确的下一步开始。</p>
       </div>
+      <div class="dash-actions"><button class="dash-button dash-button--ghost" @click="go('/user/search')"><el-icon><Search /></el-icon>查知识</button><button class="dash-button" @click="go('/user/case-upload')"><el-icon><UploadFilled /></el-icon>沉淀经验</button></div>
+    </section>
 
-      <!-- ================= 右列 ================= -->
-      <div class="col-right">
-        <!-- AI 助手 -->
-        <section class="card assistant">
-          <header class="card-head">
-            <h3 class="card-title"><span class="bar" />AI 助手</h3>
-          </header>
-          <p class="asst-hello">您好，我是 AI 助手。可询问设备故障分析、检修建议、知识查询等问题。</p>
-          <div class="asst-chips">
-            <button @click="fillAssistant('电机振动大是什么原因？')">电机振动大是什么原因？</button>
-            <button @click="fillAssistant('如何处理轴承过热？')">如何处理轴承过热？</button>
-            <button @click="fillAssistant('推荐相关检修案例')">推荐相关检修案例</button>
-          </div>
-          <div class="asst-input">
-            <input
-              v-model="assistantInput"
-              placeholder="请输入您的问题..."
-              @keyup.enter="askAssistant()"
-            />
-            <button class="asst-send" @click="askAssistant()"><el-icon><Promotion /></el-icon></button>
-          </div>
-        </section>
+    <section class="metric-row">
+      <button v-for="stat in stats" :key="stat.key" class="metric-card" @click="go(stat.to)">
+        <span class="metric-top"><span>{{ stat.label }}</span><el-icon><component :is="stat.icon" /></el-icon></span>
+        <strong>{{ Number(stat.display).toFixed(stat.decimals) }}{{ stat.suffix }}</strong><small>实时同步 · 查看详情 <el-icon><ArrowRight /></el-icon></small>
+      </button>
+    </section>
 
-        <!-- 知识问答（替换设备健康） -->
-        <section class="card quiz">
-          <header class="card-head">
-            <h3 class="card-title"><span class="bar" />知识问答</h3>
-            <router-link to="/user/quiz" class="more">更多 <el-icon><ArrowRight /></el-icon></router-link>
-          </header>
-          <p class="quiz-intro">挑战检修知识题库，巩固设备原理与排障要点。</p>
-          <div class="quiz-samples">
-            <button v-for="q in quizSamples" :key="q" class="quiz-chip" @click="go('/user/quiz')">
-              {{ q }}
-            </button>
-          </div>
-          <button class="quiz-go" @click="go('/user/quiz')">
-            开始知识问答 <el-icon><ArrowRight /></el-icon>
-          </button>
-        </section>
+    <section class="hero-panel">
+      <div class="hero-copy"><span class="dash-kicker">SMART MAINTENANCE DESK</span><h2>现场问题，从这里开始解决。</h2><p>输入设备、现象或故障关键词，系统会帮你从手册与历史经验里找到可执行答案。</p><div class="hero-search"><el-icon><Search /></el-icon><input v-model="problem" placeholder="例如：电机启动后振动异常" @keyup.enter="startDiagnose"><button @click="startDiagnose">开始检索 <el-icon><ArrowRight /></el-icon></button></div><div class="hero-links"><span>推荐入口</span><button v-for="node in nodes.slice(0,3)" :key="node.to" @click="go(node.to)">{{ node.label }} <el-icon><ArrowRight /></el-icon></button></div></div>
+      <div class="hero-visual"><div class="visual-orbit orbit-a"></div><div class="visual-orbit orbit-b"></div><div class="visual-core"><span>AI</span><small>MAINT</small></div><div class="visual-caption"><b>24 / 7</b><span>现场协作在线</span></div></div>
+    </section>
 
-        <!-- 知识图谱 -->
-        <section class="card">
-          <header class="card-head">
-            <h3 class="card-title"><span class="bar" />知识图谱</h3>
-            <router-link to="/user/graph" class="more">更多 <el-icon><ArrowRight /></el-icon></router-link>
-          </header>
-          <button class="mini-graph" @click="go('/user/graph')">
-            <svg viewBox="0 0 260 150">
-              <line x1="130" y1="75" x2="60" y2="38" />
-              <line x1="130" y1="75" x2="48" y2="92" />
-              <line x1="130" y1="75" x2="86" y2="120" />
-              <line x1="130" y1="75" x2="200" y2="40" />
-              <line x1="130" y1="75" x2="214" y2="100" />
-              <line x1="130" y1="75" x2="150" y2="128" />
-              <circle class="g-core" cx="130" cy="75" r="22" />
-              <text class="g-core-t" x="130" y="79" text-anchor="middle">电机</text>
-              <g class="g-node"><circle cx="60" cy="38" r="9" /><text x="60" y="24">轴承异常</text></g>
-              <g class="g-node"><circle cx="48" cy="92" r="9" /><text x="48" y="110">润滑不足</text></g>
-              <g class="g-node"><circle cx="86" cy="120" r="9" /><text x="86" y="138">转子不平衡</text></g>
-              <g class="g-node"><circle cx="200" cy="40" r="9" /><text x="200" y="26">振动过大</text></g>
-              <g class="g-node"><circle cx="214" cy="100" r="9" /><text x="214" y="118">温度故障</text></g>
-              <g class="g-node"><circle cx="150" cy="128" r="9" /><text x="150" y="146">温度过高</text></g>
-            </svg>
-          </button>
-        </section>
-
-      </div>
+    <div class="dash-columns">
+      <section class="dash-card flow-card"><div class="card-heading"><div><span class="dash-kicker">TASK FLOW</span><h3>任务流转</h3></div><button class="card-link" @click="go('/user/tasks')">查看全部 <el-icon><ArrowRight /></el-icon></button></div><div class="flow-list"><button v-for="item in taskFlow" :key="item.status" class="flow-item" @click="go('/user/tasks')"><span class="flow-dot" :class="item.tone"></span><span class="flow-label">{{ item.label }}</span><strong>{{ item.count }}</strong><el-icon><ArrowRight /></el-icon></button></div></section>
+      <section class="dash-card assistant-card"><div class="card-heading"><div><span class="dash-kicker">AI ASSISTANT</span><h3>问我一个现场问题</h3></div><span class="online-mark"><i></i>在线</span></div><p>无需组织复杂描述，输入你看到的现象即可。</p><div class="assistant-input"><input v-model="assistantInput" placeholder="例如：轴承温度持续升高" @keyup.enter="askAssistant"><button @click="askAssistant"><el-icon><ArrowRight /></el-icon></button></div><div class="assistant-chips"><button v-for="q in quizSamples" :key="q" @click="fillAssistant(q)">{{ q }}</button></div></section>
     </div>
+
+    <section class="quick-strip"><div><span class="dash-kicker">QUICK ACCESS</span><h3>常用工具</h3></div><div class="quick-grid"><button v-for="node in nodes.slice(3)" :key="node.to" @click="go(node.to)"><span class="quick-icon"><el-icon><component :is="node.icon" /></el-icon></span><span><b>{{ node.label }}</b><small>{{ node.sub }}</small></span><el-icon><ArrowRight /></el-icon></button></div></section>
   </div>
 </template>
 
 <style scoped>
-.user-dashboard { max-width: 1320px; margin: 0 auto; }
-.hero-kicker {
-  display: block;
-  margin-bottom: 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.6px;
-  color: var(--plaza-accent);
+.hero-panel,
+.hero-search,
+.visual-caption,
+.assistant-input,
+.assistant-chips button { border-color: #dbe7f5 !important; }
+.visual-orbit { border-color: #c9daf2 !important; }
+.assistant-chips button { color: #1f6ed4 !important; }
+.dash-button--ghost:hover { border-color: #9fc1ea !important; }
+.flow-dot.info,
+.flow-dot.warning,
+.flow-dot.gold { background: #1f6ed4 !important; }
+.neo-dashboard{min-height:100%;padding:46px clamp(22px,5vw,72px) 70px;background:#f7f7f5;color:#1b1b1b}.dash-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;max-width:1320px;margin:0 auto 30px}.dash-kicker{display:block;margin-bottom:11px;color:#a6a6a4;font:700 10px/1.2 ui-monospace,SFMono-Regular,monospace;letter-spacing:.15em}.dash-intro h1{margin:0;font-size:clamp(34px,5vw,65px);line-height:1.08;letter-spacing:-.06em;font-weight:700}.dash-intro h1 em{color:#1f6ed4;font-style:normal}.dash-intro p{margin:15px 0 0;color:#858585;font-size:14px}.dash-actions{display:flex;gap:9px}.dash-button{display:inline-flex;align-items:center;gap:7px;padding:12px 17px;border:1px solid #1f6ed4;border-radius:99px;color:#fff;background:#1f6ed4;cursor:pointer;font-size:12px;font-weight:650;transition:.2s}.dash-button:hover{background:#1554ad;transform:translateY(-2px)}.dash-button--ghost{color:#555;border-color:#e5e5e3;background:#fff}.dash-button--ghost:hover{color:#1f6ed4;border-color:#f0aaa7;background:#fff}.metric-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:1320px;margin:0 auto 14px}.metric-card{padding:20px 22px;border:1px solid #e8e8e6;border-radius:18px;background:#fff;text-align:left;cursor:pointer;box-shadow:0 9px 26px #00000005;transition:.2s}.metric-card:hover{border-color:#9fc1ea;transform:translateY(-3px);box-shadow:0 17px 34px #0000000b}.metric-top{display:flex;justify-content:space-between;align-items:center;color:#969696;font-size:12px}.metric-top .el-icon{color:#1f6ed4;font-size:18px}.metric-card strong{display:block;margin:16px 0 10px;font-size:39px;letter-spacing:-.06em}.metric-card small{display:flex;align-items:center;gap:4px;color:#aaa;font-size:10px}.metric-card small .el-icon{font-size:12px}.hero-panel{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,.75fr);gap:24px;max-width:1320px;min-height:390px;margin:0 auto 14px;padding:42px 48px;border:1px solid #f0d1cf;border-radius:24px;background:linear-gradient(120deg,#eaf2ff,#fff 70%);overflow:hidden}.hero-copy{align-self:center;max-width:700px}.hero-copy h2{max-width:680px;margin:0;font-size:clamp(30px,4vw,54px);line-height:1.12;letter-spacing:-.06em}.hero-copy p{max-width:560px;margin:18px 0 24px;color:#777;font-size:14px;line-height:1.8}.hero-search{display:flex;align-items:center;gap:10px;max-width:620px;padding:5px 5px 5px 16px;border:1px solid #ecd4d2;border-radius:14px;background:#fff}.hero-search>.el-icon{color:#1f6ed4}.hero-search input{flex:1;min-width:0;border:0;outline:0;color:#333;background:transparent;font:13px inherit}.hero-search button{display:flex;align-items:center;gap:6px;padding:11px 15px;border:0;border-radius:10px;color:#fff;background:#1f6ed4;cursor:pointer;font-size:12px;font-weight:650}.hero-search button:hover{background:#1554ad}.hero-links{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-top:16px;color:#aaa;font-size:11px}.hero-links button{display:inline-flex;align-items:center;gap:3px;border:0;color:#666;background:none;cursor:pointer;font-size:11px}.hero-links button:hover{color:#1f6ed4}.hero-visual{position:relative;display:grid;place-items:center;min-height:280px}.visual-orbit{position:absolute;border:1px solid #e7aaa6;border-radius:50%;transform:rotate(-24deg)}.orbit-a{width:275px;height:130px}.orbit-b{width:235px;height:235px;border-color:#c9daf2;transform:rotate(22deg)}.visual-core{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;flex-direction:column;width:126px;height:126px;border-radius:50%;color:#fff;background:#1f6ed4;box-shadow:0 16px 35px #1f6ed440}.visual-core span{font-size:35px;font-weight:750;letter-spacing:-.08em}.visual-core small{font:9px ui-monospace,SFMono-Regular,monospace;letter-spacing:.22em;opacity:.8}.visual-caption{position:absolute;right:2%;bottom:7%;display:flex;flex-direction:column;gap:4px;padding:13px 15px;border:1px solid #f1d6d4;border-radius:13px;background:#ffffffe8}.visual-caption b{font-size:17px}.visual-caption span{color:#999;font-size:10px}.dash-columns{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:1320px;margin:0 auto 14px}.dash-card,.quick-strip{border:1px solid #e8e8e6;border-radius:20px;background:#fff;box-shadow:0 9px 26px #00000004}.dash-card{padding:25px}.card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.card-heading h3,.quick-strip h3{margin:0;font-size:20px;letter-spacing:-.03em}.card-link{display:flex;align-items:center;gap:5px;border:0;color:#1f6ed4;background:none;cursor:pointer;font-size:11px}.flow-list{margin-top:20px}.flow-item{display:flex;align-items:center;gap:11px;width:100%;padding:12px 0;border:0;border-bottom:1px solid #f2f2f1;color:#666;background:none;text-align:left;cursor:pointer}.flow-item:last-child{border-bottom:0}.flow-item:hover{color:#1f6ed4}.flow-dot{width:9px;height:9px;border-radius:50%;background:#ddd}.flow-dot.accent{background:#1f6ed4}.flow-dot.info{background:#e59b48}.flow-dot.warning{background:#ebbb58}.flow-dot.gold{background:#dd7d69}.flow-dot.success{background:#61a579}.flow-label{flex:1;font-size:13px}.flow-item strong{color:#1b1b1b;font-size:17px}.assistant-card{background:linear-gradient(145deg,#fff,#f5f9ff)}.online-mark{display:flex;align-items:center;gap:6px;color:#58a276;font-size:11px}.online-mark i{width:6px;height:6px;border-radius:50%;background:#58a276}.assistant-card>p{margin:20px 0 15px;color:#999;font-size:12px}.assistant-input{display:flex;align-items:center;gap:8px;padding:5px 5px 5px 13px;border:1px solid #edd8d6;border-radius:13px;background:#fff}.assistant-input:focus-within{border-color:#1f6ed4;box-shadow:0 0 0 3px #1f6ed410}.assistant-input input{flex:1;min-width:0;border:0;outline:0;font-size:12px}.assistant-input button{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:10px;color:#fff;background:#1f6ed4;cursor:pointer}.assistant-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:15px}.assistant-chips button{padding:8px 10px;border:1px solid #efd9d8;border-radius:99px;color:#bf5a57;background:#fff;cursor:pointer;font-size:10px}.assistant-chips button:hover{color:#fff;background:#1f6ed4}.quick-strip{display:flex;align-items:center;gap:38px;max-width:1320px;margin:0 auto;padding:25px}.quick-strip>div:first-child{min-width:125px}.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);flex:1;gap:8px}.quick-grid button{display:flex;align-items:center;gap:10px;padding:10px;border:0;border-radius:13px;background:#fafafa;text-align:left;cursor:pointer}.quick-grid button:hover{background:#eaf2ff}.quick-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;color:#1f6ed4;background:#eaf2ff}.quick-grid button>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:3px}.quick-grid b{font-size:12px}.quick-grid small{color:#aaa;font-size:9px;letter-spacing:.08em}.quick-grid>.el-icon{color:#bbb}@media(max-width:950px){.hero-panel{grid-template-columns:1fr;padding:32px}.hero-visual{min-height:220px}.dash-columns{grid-template-columns:1fr}}@media(max-width:680px){.neo-dashboard{padding:28px 16px 50px}.dash-intro{display:block}.dash-actions{margin-top:20px}.metric-row{grid-template-columns:1fr}.hero-panel{padding:25px 20px}.hero-search{align-items:stretch;flex-wrap:wrap}.hero-search input{min-height:35px}.hero-search button{width:100%;justify-content:center}.quick-strip{display:block;padding:21px}.quick-grid{grid-template-columns:1fr;margin-top:18px}}
+</style>
+
+<style scoped>
+/* 欢迎标题保持稳定字号，仅在窄屏下切换到明确的移动端规格。 */
+.dash-intro h1 {
+  font-size: 65px !important;
+  white-space: nowrap;
 }
 
-.dash {
-  display: grid;
-  grid-template-columns: minmax(0, 1.62fr) minmax(0, 1fr);
-  gap: 20px;
-  align-items: stretch;          /* 两列等高：以较高的一列为准 */
-}
-.col-left, .col-right { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-/* 顶部：三个指标卡与右列首卡同处列顶 → 上边框对齐 */
-/* 底部：每列最后一个卡片纵向撑满 → 下边框对齐且不留空白 */
-.col-left > :last-child,
-.col-right > :last-child { flex: 1 1 auto; }
-/* 撑高后内部内容居中/分布，避免卡片内出现大片空白 */
-.flow-card { display: flex; flex-direction: column; }
-.flow-card .flow { margin: auto 0; }
-.quiz { display: flex; flex-direction: column; }
-.quiz .quiz-go { margin-top: auto; }
-
-/* —— 通用卡片 —— */
-.card {
-  position: relative;
-  background: var(--plaza-bg-card);
-  border: 1px solid var(--plaza-border);
-  border-radius: var(--plaza-radius-lg);
-  padding: 20px 22px;
-  box-shadow: var(--plaza-shadow-organic);
-}
-.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.card-title, .hero-title {
-  display: flex; align-items: center; gap: 9px;
-  font-family: var(--font-display);
-  font-size: 1.16rem; font-weight: 700; color: var(--plaza-heading);
-}
-.bar { width: 4px; height: 17px; border-radius: 3px; background: var(--plaza-accent-grad); }
-.more {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 12.5px; color: var(--plaza-text-muted); font-family: var(--font-mono);
-  transition: color .2s ease;
-}
-.more:hover { color: var(--plaza-accent); }
-
-/* —— 指标卡 —— */
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.dash-stat {
-  position: relative; overflow: hidden; cursor: pointer; text-align: left;
-  padding: 16px 18px 14px;
-  background: var(--plaza-bg-card);
-  border: 1px solid var(--plaza-border);
-  border-radius: 14px;
-  box-shadow: var(--plaza-shadow-organic);
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-}
-.dash-stat:hover { transform: translateY(-3px); box-shadow: var(--plaza-shadow-organic-hover); border-color: var(--plaza-border-strong); }
-.stat-top { display: flex; align-items: center; justify-content: space-between; }
-.stat-ico {
-  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-size: 19px;
-}
-.dash-stat.accent .stat-ico { color: var(--plaza-accent); background: var(--plaza-accent-soft); }
-.dash-stat.info .stat-ico { color: var(--plaza-info); background: var(--plaza-info-soft); }
-.dash-stat.success .stat-ico { color: var(--plaza-success); background: var(--plaza-success-soft); }
-.stat-val { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; color: var(--plaza-heading); line-height: 1; }
-.stat-val i { font-size: 1rem; font-style: normal; color: var(--plaza-text-muted); margin-left: 1px; }
-.stat-label { display: block; margin-top: 6px; font-size: 13px; color: var(--plaza-text-muted); }
-.stat-spark { display: block; width: 100%; height: 22px; margin-top: 8px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
-.dash-stat.accent .stat-spark { stroke: var(--plaza-accent); }
-.dash-stat.info .stat-spark { stroke: var(--signal-strong); }
-.dash-stat.success .stat-spark { stroke: var(--plaza-success); }
-
-/* —— AI 检修 暖咖控制台 —— */
-.hero {
-  position: relative; overflow: hidden;
-  margin-top: 14px;            /* 与上方三个指标卡拉开距离，不贴在一起 */
-  border-radius: var(--plaza-radius-lg);
-  padding: 20px 22px 22px;
-  color: var(--plaza-panel-bg);
-  background:
-    radial-gradient(120% 120% at 10% -10%, var(--signal-line), transparent 55%),
-    linear-gradient(160deg, var(--plaza-heading) 0%, var(--plaza-heading) 70%);
-  border: 1px solid var(--signal-soft);
-  box-shadow: 0 26px 60px -22px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255,255,255,.02);
-}
-.hero::before {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background-image:
-    linear-gradient(var(--signal-soft) 1px, transparent 1px),
-    linear-gradient(90deg, var(--signal-soft) 1px, transparent 1px);
-  background-size: 26px 26px;
-  -webkit-mask-image: radial-gradient(circle at 70% 50%, #000, transparent 75%);
-  mask-image: radial-gradient(circle at 70% 50%, #000, transparent 75%);
-}
-.hero-head { position: relative; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.hero-title { color: #fbeede; }
-.hero-tag { font-family: var(--font-mono); font-size: 10px; letter-spacing: 1.6px; color: var(--signal); }
-.hero-body { position: relative; display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 20px; }
-
-/* 表单 */
-.form { display: flex; flex-direction: column; }
-.f-label { font-size: 12.5px; color: var(--plaza-border-strong); margin: 12px 0 6px; }
-.f-label:first-child { margin-top: 0; }
-.f-select, .f-area {
-  position: relative;
-  background: rgba(255,255,255,.045);
-  border: 1px solid var(--signal-line);
-  border-radius: 10px;
-  transition: border-color .2s ease;
-}
-.f-select:focus-within, .f-area:focus-within { border-color: var(--signal); }
-.f-select input, .f-area textarea {
-  width: 100%; background: transparent; border: none; outline: none;
-  color: #fbeede; font-size: 13.5px; font-family: inherit;
-}
-.f-select { display: flex; align-items: center; padding: 10px 12px; }
-.f-select .el-icon { color: var(--signal); transform: rotate(90deg); }
-.f-area { padding: 10px 12px 22px; }
-.f-area textarea { resize: none; height: 64px; line-height: 1.5; }
-.f-area textarea::placeholder { color: var(--plaza-text-muted); }
-.f-count { position: absolute; right: 10px; bottom: 6px; font-size: 11px; font-family: var(--font-mono); color: var(--plaza-text-muted); }
-.f-go {
-  margin-top: 16px; height: 44px; border: none; cursor: pointer;
-  border-radius: 11px; color: var(--plaza-heading); font-weight: 700; font-size: 14.5px; letter-spacing: .5px;
-  background: linear-gradient(135deg, var(--plaza-accent), var(--signal-strong));
-  box-shadow: 0 10px 24px -8px var(--signal-strong);
-  transition: transform .18s ease, box-shadow .18s ease;
-}
-.f-go:hover { transform: translateY(-2px); box-shadow: 0 16px 30px -8px var(--signal-strong); }
-.f-go .tri { font-size: 11px; }
-
-/* 全息检修台图区 */
-.diagram { position: relative; min-height: 340px; display: flex; align-items: center; justify-content: center; }
-.links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.flow-line {
-  fill: none; stroke: var(--signal); stroke-width: .5; opacity: .5;
-  stroke-dasharray: 3 4; stroke-dashoffset: 0;
-}
-
-/* 3D 平台 */
-.holo {
-  position: relative; width: 230px; height: 230px;
-  perspective: 950px;
-  display: grid; place-items: center;
-}
-.holo-platform {
-  position: absolute; inset: 0; margin: auto;
-  width: 200px; height: 200px;
-  transform-style: preserve-3d;
-  transform-origin: 50% 50%;
-}
-.ring { position: absolute; inset: 0; margin: auto; border-radius: 50%; }
-.ring.r1 { width: 200px; height: 200px; border: 1px dashed var(--signal); }
-.ring.r2 { width: 150px; height: 150px; border: 1.5px solid var(--signal); box-shadow: 0 0 18px var(--signal-soft) inset; }
-.ring.r3 {
-  width: 96px; height: 96px;
-  border: 2px solid transparent;
-  border-top-color: var(--signal); border-right-color: var(--signal-strong);
-  box-shadow: 0 0 22px var(--signal-line);
-}
-.hub { position: absolute; inset: 0; margin: auto; width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle, rgba(246,176,114,.9), var(--signal-line) 70%, transparent); }
-.holo-core {
-  position: relative; z-index: 2; width: 150px; height: 150px;
-  display: grid; place-items: center; cursor: grab; touch-action: none;
-}
-.holo-core:active { cursor: grabbing; }
-.bench { width: 132px; height: 132px; overflow: visible; }
-.bn-line { fill: none; stroke: url(#bg1); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.bn-fill { fill: var(--signal-soft); }
-.bn-fill2 { fill: var(--signal); }
-.bn-wave { fill: none; stroke: #ffd9a8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.core-glow {
-  position: absolute; width: 150px; height: 150px; border-radius: 50%; z-index: -1;
-  background: radial-gradient(circle, var(--signal-line), transparent 65%);
-  filter: blur(6px);
-}
-.holo-hint {
-  position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%);
-  font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; color: var(--plaza-text-muted);
-  opacity: .8;
-}
-
-/* 功能节点 */
-.diag-node {
-  position: absolute; z-index: 3;
-  display: flex; align-items: center; gap: 9px;
-  padding: 8px 12px; border-radius: 11px;
-  background: rgba(0, 0, 0, .78);
-  border: 1px solid var(--signal-line);
-  box-shadow: 0 8px 20px -10px rgba(0,0,0,.6);
-  backdrop-filter: blur(4px);
-  transition: transform .2s ease, border-color .2s ease, background .2s ease;
-}
-.diag-node:hover { transform: scale(1.05); border-color: var(--signal); background: rgba(0, 0, 0, .9); }
-.diag-node.left { left: 2px; flex-direction: row; }
-.diag-node.right { right: 2px; flex-direction: row-reverse; text-align: right; }
-.diag-node.s0 { top: 8%; }
-.diag-node.s1 { top: 50%; transform: translateY(-50%); }
-.diag-node.s1:hover { transform: translateY(-50%) scale(1.05); }
-.diag-node.s2 { bottom: 8%; }
-.dn-ico { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: grid; place-items: center; font-size: 16px; color: var(--signal); background: var(--signal-soft); }
-.dn-text { display: flex; flex-direction: column; }
-.dn-label { font-size: 13px; font-weight: 600; color: #fbeede; }
-.dn-sub { font-family: var(--font-mono); font-size: 9px; letter-spacing: 1px; color: var(--plaza-text-muted); }
-
-/* —— 检修任务流转 —— */
-.flow { position: relative; padding-top: 6px; }
-.flow-track { position: absolute; top: 13px; left: 8%; right: 8%; height: 2px; background: var(--plaza-border); border-radius: 2px; }
-.flow-fill { position: absolute; inset: 0; border-radius: 2px; background: linear-gradient(90deg, var(--plaza-accent), var(--signal), var(--plaza-success)); }
-.flow-cols { position: relative; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-.flow-col { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.flow-dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--plaza-bg-card); border: 2px solid var(--plaza-border-strong); }
-.flow-dot i { width: 8px; height: 8px; border-radius: 50%; }
-.flow-dot.accent { border-color: var(--plaza-accent); } .flow-dot.accent i { background: var(--plaza-accent); }
-.flow-dot.info { border-color: var(--signal-strong); } .flow-dot.info i { background: var(--signal-strong); }
-.flow-dot.warning { border-color: var(--plaza-warning); } .flow-dot.warning i { background: var(--plaza-warning); }
-.flow-dot.gold { border-color: var(--plaza-gold); } .flow-dot.gold i { background: var(--plaza-gold); }
-.flow-dot.success { border-color: var(--plaza-success); } .flow-dot.success i { background: var(--plaza-success); }
-.flow-stat { width: 100%; text-align: center; padding: 10px 6px; border-radius: 11px; background: var(--plaza-bg); border: 1px solid var(--plaza-border); transition: border-color .2s ease, transform .2s ease; }
-.flow-col:hover .flow-stat { transform: translateY(-2px); border-color: var(--plaza-border-strong); }
-.fc-head { display: flex; align-items: baseline; justify-content: center; gap: 8px; }
-.fc-label { font-size: 13px; color: var(--plaza-text); }
-.fc-count { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; }
-.flow-stat.accent .fc-count { color: var(--plaza-accent); }
-.flow-stat.info .fc-count { color: var(--signal-strong); }
-.flow-stat.warning .fc-count { color: var(--plaza-warning); }
-.flow-stat.gold .fc-count { color: var(--plaza-gold); }
-.flow-stat.success .fc-count { color: var(--plaza-success); }
-.fc-sub { display: block; margin-top: 2px; font-size: 11px; color: var(--plaza-text-muted); }
-
-/* —— 知识问答 —— */
-.quiz-intro { font-size: 13px; color: var(--plaza-text-muted); line-height: 1.6; margin-bottom: 14px; }
-.quiz-samples { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.quiz-chip {
-  text-align: left; cursor: pointer; padding: 11px 14px; border-radius: 10px;
-  background: var(--plaza-bg); border: 1px solid var(--plaza-border);
-  color: var(--plaza-text); font-size: 13px; transition: all .2s ease;
-}
-.quiz-chip:hover { border-color: var(--plaza-accent); background: var(--plaza-accent-soft); color: var(--plaza-accent); transform: translateX(3px); }
-.quiz-go, .asst-send {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer;
-}
-.quiz-go {
-  width: 100%; height: 42px; border: none; border-radius: 11px; font-weight: 700; font-size: 14px;
-  color: var(--home-btn-text); background: var(--plaza-accent-grad);
-  box-shadow: 0 10px 22px -10px var(--plaza-accent); transition: transform .18s ease;
-}
-.quiz-go:hover { transform: translateY(-2px); }
-
-/* —— 知识图谱 —— */
-.mini-graph { width: 100%; cursor: pointer; padding: 6px; border: none; background: transparent; }
-.mini-graph svg { width: 100%; height: auto; }
-.mini-graph line { stroke: var(--plaza-border-strong); stroke-width: 1.2; stroke-dasharray: 2 3; }
-.mini-graph .g-core { fill: var(--plaza-accent-soft-strong); stroke: var(--plaza-accent); stroke-width: 2; }
-.mini-graph .g-core-t { fill: var(--plaza-accent); font-size: 13px; font-weight: 700; font-family: var(--font-display); }
-.mini-graph .g-node circle { fill: var(--plaza-bg-card); stroke: var(--signal-strong); stroke-width: 2; transition: fill .2s ease; }
-.mini-graph .g-node text { fill: var(--plaza-text-muted); font-size: 10px; text-anchor: middle; }
-.mini-graph:hover .g-node circle { fill: var(--signal-soft); }
-
-/* —— AI 助手 —— */
-.asst-hello { font-size: 13px; color: var(--plaza-text); line-height: 1.6; padding: 12px 14px; border-radius: 10px; background: var(--plaza-bg); margin-bottom: 12px; }
-.asst-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.asst-chips button {
-  cursor: pointer; padding: 7px 11px; border-radius: 999px; font-size: 12px;
-  background: var(--plaza-bg); border: 1px solid var(--plaza-border); color: var(--plaza-text-muted);
-  transition: all .2s ease;
-}
-.asst-chips button:hover { border-color: var(--plaza-accent); color: var(--plaza-accent); background: var(--plaza-accent-soft); }
-.asst-input { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 12px; background: var(--plaza-bg); border: 1px solid var(--plaza-border); transition: border-color .2s ease; }
-.asst-input:focus-within { border-color: var(--plaza-accent); }
-.asst-input input { flex: 1; border: none; background: transparent; outline: none; font-size: 13.5px; color: var(--plaza-text); font-family: inherit; }
-.asst-send { width: 36px; height: 36px; flex-shrink: 0; border: none; border-radius: 9px; color: var(--home-btn-text); background: var(--plaza-accent-grad); font-size: 16px; }
-.asst-send:hover { filter: brightness(1.05); }
-
-/* —— 响应式 —— */
-@media (max-width: 1180px) {
-  .dash { grid-template-columns: 1fr; }
-}
-@media (max-width: 720px) {
-  .stats { grid-template-columns: 1fr; }
-  .hero-body { grid-template-columns: 1fr; }
-  .diagram { min-height: 380px; }
-  .flow-cols { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 680px) {
+  .dash-intro h1 {
+    font-size: 42px !important;
+    white-space: normal;
+  }
 }
 </style>

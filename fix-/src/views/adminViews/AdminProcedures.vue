@@ -485,7 +485,7 @@ onMounted(async () => {
       <!-- 步骤编辑器 -->
       <div class="dlg-section">
         <div class="dlg-section-title">
-          <span class="ds-bar" style="background:#a8605f" />维护步骤
+          <span class="ds-bar" style="background:#2f6fbd" />维护步骤
           <span class="step-count">{{ formSteps.length }} 步</span>
         </div>
 
@@ -623,7 +623,7 @@ onMounted(async () => {
 
         <div class="dv-steps">
           <div class="dv-section-title">
-            <span class="ds-bar" style="background:#a8605f" />步骤清单
+            <span class="ds-bar" style="background:#2f6fbd" />步骤清单
           </div>
           <div v-for="(step, i) in detail.steps" :key="step.id || i" class="dv-step" :class="{ 'dv-cp': step.isCheckpoint }">
             <div class="dvs-head">
@@ -676,7 +676,7 @@ onMounted(async () => {
 .ap-title-led {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--signal, #ffa62b);
-  box-shadow: 0 0 0 3px var(--signal-soft, rgba(255,166,43,.14));
+  box-shadow: 0 0 0 3px var(--signal-soft, rgba(31,110,212,.14));
   animation: ap-pulse 2.4s ease-in-out infinite;
 }
 @keyframes ap-pulse { 50% { opacity: 0.4; } }
@@ -775,7 +775,7 @@ onMounted(async () => {
 .card-name { font-size: 16px; font-weight: 700; color: var(--plaza-heading); margin: 0; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card-meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .meta-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--plaza-panel-bg); color: var(--plaza-text); }
-.meta-chip.steps { background: #f5ece8; color: #a8605f; }
+.meta-chip.steps { background: #eef5ff; color: #2f6fbd; }
 .card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: auto; font-size: 11.5px; color: var(--plaza-text-muted); }
 .card-source { font-weight: 500; }
 
@@ -790,7 +790,7 @@ onMounted(async () => {
 .ca-edit:hover { background: var(--plaza-accent-soft); color: var(--plaza-accent); }
 .ca-pub:hover  { background: #f0fdf4; color: #16a34a; }
 .ca-view:hover { background: var(--plaza-accent-soft); color: var(--plaza-accent); }
-.ca-arch:hover { background: #f5ece8; color: #a8605f; }
+.ca-arch:hover { background: #eef5ff; color: #2f6fbd; }
 
 /* ── 分页 ── */
 .ap-pager { display: flex; justify-content: center; margin-top: 24px; }
@@ -805,7 +805,7 @@ onMounted(async () => {
   margin-bottom: 12px; letter-spacing: 0.2px;
 }
 .ds-bar { width: 3px; height: 14px; border-radius: 2px; background: var(--plaza-accent); display: inline-block; }
-.step-count { font-family: var(--font-mono); font-size: 12px; color: #a8605f; font-weight: 600; margin-left: auto; }
+.step-count { font-family: var(--font-mono); font-size: 12px; color: #2f6fbd; font-weight: 600; margin-left: auto; }
 
 /* 步骤编辑器 */
 .steps-editor { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; padding-right: 4px; }

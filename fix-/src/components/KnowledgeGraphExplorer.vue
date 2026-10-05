@@ -17,7 +17,7 @@ const TYPE = {
   device:    { label: '设备', fill: 'var(--plaza-accent-soft)', stroke: 'var(--plaza-accent)', size: 48 },
   component: { label: '部件', fill: '#eef4e2', stroke: '#5e8c3e', size: 34 },
   fault:     { label: '故障', fill: '#fdf2e0', stroke: '#df9226', size: 31 },
-  solution:  { label: '方案', fill: '#f5ece8', stroke: '#a8605f', size: 27 },
+  solution:  { label: '方案', fill: '#eef5ff', stroke: '#2f6fbd', size: 27 },
   case:      { label: '案例', fill: '#e8f1ee', stroke: '#3f8c7c', size: 29 },
 }
 const SEVERITY = { 轻微: '#c9a23a', 一般: '#df9226', 严重: 'var(--plaza-accent)', 致命: '#c5402c' }
@@ -461,7 +461,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); cancelAnimationFrame(raf); gr
                 <text x="210" y="84">故障</text>
               </g>
               <g class="eg-node" style="--d:.38s;--fx:-3px">
-                <circle cx="70" cy="160" r="15" fill="#f5ece8" stroke="#a8605f" />
+                <circle cx="70" cy="160" r="15" fill="#eef5ff" stroke="#2f6fbd" />
                 <text x="70" y="190">方案</text>
               </g>
               <g class="eg-node" style="--d:.48s;--fx:3px">
@@ -556,7 +556,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); cancelAnimationFrame(raf); gr
 .t-sub{font-family:'JetBrains Mono','IBM Plex Mono',monospace;font-size:10px;color:var(--plaza-text-muted);letter-spacing:2px}
 .t-mode{margin-left:8px;font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;border:1px solid}
 .m-ro{color:var(--primary);border-color:var(--plaza-accent);background:var(--plaza-accent-soft)}
-.m-rw{color:#d97706;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.1)}
+.m-rw{color:#1f6ed4;border-color:rgba(31,110,212,.35);background:rgba(31,110,212,.1)}
 .kg-readout{display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono','IBM Plex Mono',monospace;font-size:12px;color:var(--mut)}
 .kg-readout b{color:var(--primary);font-size:14px;font-weight:700}
 .kg-readout i{width:1px;height:14px;background:var(--line)}
@@ -573,8 +573,8 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); cancelAnimationFrame(raf); gr
 .hud-btn{background:var(--primary);color:#fff;border:1px solid var(--primary);border-radius:8px;padding:9px;font-weight:600;font-size:13px;letter-spacing:.5px;cursor:pointer;transition:.18s;box-shadow:0 2px 8px var(--plaza-accent-soft-strong)}
 .hud-btn:hover{background:var(--plaza-accent-hover);box-shadow:0 4px 14px var(--plaza-accent)}
 .hud-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
-.b-amber{background:#fff;color:#d97706;border-color:#fcd9a6;box-shadow:none} .b-amber:hover{background:#fff7ed}
-.b-warn{background:#fff;color:#d97706;border-color:#fcd9a6;box-shadow:none} .b-warn:hover{background:#fff7ed}
+.b-amber{background:#fff;color:#1f6ed4;border-color:#c9daf2;box-shadow:none} .b-amber:hover{background:#eaf2ff}
+.b-warn{background:#fff;color:#1f6ed4;border-color:#c9daf2;box-shadow:none} .b-warn:hover{background:#eaf2ff}
 .mini{flex:1;background:#fff;color:var(--slate);border:1px solid var(--line);border-radius:8px;padding:8px;font-weight:600;font-size:12px;cursor:pointer;transition:.15s}
 .mini:hover{border-color:var(--primary);color:var(--primary);background:var(--plaza-panel-bg)}
 .mini.danger:hover{border-color:#ef4444;color:#ef4444;background:#fef2f2}
@@ -582,7 +582,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); cancelAnimationFrame(raf); gr
 .lg-h{font-size:12px;font-weight:700;color:var(--mut);margin-bottom:9px}
 .lg-row{display:flex;align-items:center;gap:9px;font-size:13px;padding:3px 0;color:var(--slate)}
 .dot{width:13px;height:13px;border-radius:50%;border:2px solid}
-.dot-uv{background:#fff7ed;border:2px dashed var(--amber)}
+.dot-uv{background:#eaf2ff;border:2px dashed var(--primary)}
 
 /* 画布 */
 .kg-canvas-wrap{flex:1;position:relative;min-width:0;background:
@@ -644,7 +644,7 @@ onBeforeUnmount(() => { clearTimeout(renderTimer); cancelAnimationFrame(raf); gr
 .d-close{background:#f5f7fb;border:1px solid var(--line);color:var(--mut);border-radius:6px;width:24px;height:24px;cursor:pointer;line-height:1}
 .d-close:hover{color:var(--slate);border-color:var(--primary)}
 .d-name{font-size:18px;font-weight:700;margin:10px 0 8px;color:var(--slate)}
-.badge-uv{display:inline-block;font-size:11px;color:#d97706;background:#fff7ed;border:1px solid #fcd9a6;padding:3px 9px;border-radius:6px;margin-bottom:8px}
+.badge-uv{display:inline-block;font-size:11px;color:#1f6ed4;background:#eaf2ff;border:1px solid #c9daf2;padding:3px 9px;border-radius:6px;margin-bottom:8px}
 .d-attrs{margin:14px 0;display:grid;grid-template-columns:62px 1fr;gap:8px 10px}
 .d-attrs dt{color:var(--mut);font-size:12px}
 .d-attrs dd{margin:0;color:var(--slate);font-size:13px;word-break:break-all}

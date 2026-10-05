@@ -19,7 +19,7 @@ const TYPE = {
   device:    { label: '设备', fill: 'var(--plaza-accent-soft)', stroke: 'var(--plaza-accent)', size: 50 },
   component: { label: '部件', fill: '#eef3e6', stroke: '#5e8c3e', size: 36 },
   fault:     { label: '故障', fill: '#fdeede', stroke: 'var(--plaza-accent)', size: 33 },
-  solution:  { label: '方案', fill: '#f5ece8', stroke: '#a8605f', size: 29 },
+  solution:  { label: '方案', fill: '#eef5ff', stroke: '#2f6fbd', size: 29 },
 }
 const SEVERITY = { 轻微: '#c9a23a', 一般: '#df9226', 严重: 'var(--plaza-accent)', 致命: '#c5402c' }
 const REL = { OWNS: '拥有', CAUSES: '引发', HAS_SOLUTION: '方案' }
@@ -510,7 +510,7 @@ onBeforeUnmount(() => { cancelAnimationFrame(raf); graph.value?.destroy() })
                 <text x="210" y="84">故障</text>
               </g>
               <g class="eg-node" style="--d:.38s;--fx:-3px">
-                <circle cx="70" cy="160" r="15" fill="#f5ece8" stroke="#a8605f" />
+                <circle cx="70" cy="160" r="15" fill="#eef5ff" stroke="#2f6fbd" />
                 <text x="70" y="190">方案</text>
               </g>
               <g class="eg-node" style="--d:.48s;--fx:3px">

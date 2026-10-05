@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, DocumentAdd, Share, CloseBold, Right } from '@element-plus/icons-vue'
 import { getTaskList, getTaskSteps, getTaskAutoReview, promoteToProcedure, skipPromotion, decideTaskAutoReview } from '@/api/task'
@@ -7,9 +8,25 @@ import DistillationReviewPanel from '@/components/DistillationReviewPanel.vue'
 import TaskEvidenceCandidateReview from '@/components/TaskEvidenceCandidateReview.vue'
 import ExpirationReviewSection from '@/components/ExpirationReviewSection.vue'
 
+const route = useRoute()
+const router = useRouter()
+
 /* ========== Tab ========== */
-const activeTab = ref('list')
+const taskTabs = ['list', 'review', 'evidence-review', 'expiration-review']
+const activeTab = ref(taskTabs.includes(route.query.tab) ? route.query.tab : 'list')
 const focusTaskId = ref(null)
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    if (taskTabs.includes(tab) && tab !== activeTab.value) activeTab.value = tab
+  },
+)
+
+watch(activeTab, (tab) => {
+  if (route.query.tab === tab) return
+  router.replace({ path: '/admin/tasks', query: { ...route.query, tab } })
+})
 
 function goToDistill(taskId) {
   focusTaskId.value = taskId
@@ -42,7 +59,7 @@ const STATUS_MAP = {
   GENERATING:      { label: '生成中',   color: '#df9226', bg: '#fdf2e0' },
   GENERATED:       { label: '已生成',   color: '#5e8c3e', bg: '#f1f5e6' },
   GENERATE_FAILED: { label: '生成失败', color: '#c5402c', bg: '#fbeae4' },
-  EXECUTING:       { label: '执行中',   color: '#a8605f', bg: '#f5ece8' },
+  EXECUTING:       { label: '执行中',   color: '#2f6fbd', bg: '#eef5ff' },
   CLOSED:          { label: '已关闭',   color: 'var(--plaza-text-muted)', bg: 'var(--plaza-panel-bg)' },
   RESOLUTION_PENDING: { label: '待确认结果', color: '#df9226', bg: '#fdf2e0' },
 }
@@ -663,39 +680,12 @@ onMounted(() => loadTasks(1))
   display: flex;
   flex-direction: column;
 }
+/* 顶部导航浮层已经提供任务子页面入口，保留 el-tabs 仅用于内容切换。 */
 .at-tabs :deep(.el-tabs__header) {
-  margin: 0 0 12px 0;
-  padding: 4px 8px 0;
-  background: rgba(255,255,255,0.5);
-  border-bottom: 1px solid var(--plaza-border);
-  backdrop-filter: blur(4px);
-  border-radius: 12px 12px 0 0;
+  display: none !important;
 }
-.at-tabs :deep(.el-tabs__nav) {
-  border: none;
-}
-.at-tabs :deep(.el-tabs__item) {
-  height: 38px;
-  line-height: 38px;
-  border-radius: 10px 10px 0 0;
-  font-weight: 600;
-  font-size: 13.5px;
-  letter-spacing: 0.3px;
-  padding: 0 22px;
-  color: var(--plaza-text-muted);
-  border: 1px solid transparent;
-  background: transparent;
-  transition: all 0.18s ease;
-}
-.at-tabs :deep(.el-tabs__item:hover) {
-  color: var(--plaza-text);
-  background: var(--plaza-accent-soft);
-}
-.at-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--plaza-accent);
-  background: var(--plaza-bg-card);
-  border-color: var(--plaza-border);
-  border-bottom-color: var(--plaza-bg-card);
+.at-tabs :deep(.el-tabs__content) {
+  padding-top: 0 !important;
 }
 .at-tabs :deep(.el-tabs__content) {
   flex: 1;
@@ -715,9 +705,9 @@ onMounted(() => loadTasks(1))
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 20px;
-  color: #d97706;
-  background: #fff7ed;
-  border: 1px solid #fcd9a6;
+  color: #1f6ed4;
+  background: #eaf2ff;
+  border: 1px solid #c9daf2;
   letter-spacing: 0.3px;
   line-height: 1.4;
 }
@@ -734,7 +724,7 @@ onMounted(() => loadTasks(1))
 .at-title-led {
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--signal, #ffa62b);
-  box-shadow: 0 0 0 3px var(--signal-soft, rgba(255,166,43,.14));
+  box-shadow: 0 0 0 3px var(--signal-soft, rgba(31,110,212,.14));
   animation: at-pulse 2.4s ease-in-out infinite;
 }
 @keyframes at-pulse { 50% { opacity: 0.4; } }
@@ -980,4 +970,12 @@ onMounted(() => loadTasks(1))
   .filter-btns { justify-content: flex-end; }
   .exp-grid { grid-template-columns: 1fr 1fr; }
 }
+</style>
+
+
+<style scoped>
+.at-root{max-width:1380px!important;margin:0 auto!important;padding:clamp(24px,4vw,56px)!important;background:#f7f7f5!important}.at-head{padding:0 0 24px!important}.at-title-text{font-size:clamp(32px,4vw,52px)!important;letter-spacing:-.05em!important;color:#191919!important}.at-title-led{background:#1f6ed4!important}.filter-card,.at-table-wrap{background:#fff!important;border:1px solid #ececeb!important;border-radius:18px!important;box-shadow:0 10px 30px rgba(24,24,24,.045)!important}.at-tabs :deep(.el-tabs__item.is-active){color:#1f6ed4!important}.el-table :deep(tr:hover>td){background:#f5f9ff!important}
+</style>
+<style scoped>
+.at-root{background:#f7f7f5!important}.at-root .at-title-text{color:#191919!important}.at-root .at-title-sub{color:#999!important}.at-root .filter-card,.at-root .at-table-wrap{background:#fff!important;border-color:#ececeb!important;box-shadow:0 10px 30px rgba(0,0,0,.045)!important}.at-root .filter-item label{color:#777!important}.at-root .filter-btns .el-button--primary{background:#1f6ed4!important;border-color:#1f6ed4!important}.at-root .filter-btns .el-button--primary:hover{background:#1554ad!important}.at-root .el-table th.el-table__cell{background:#fafafa!important}.at-root .el-table tr:hover>td.el-table__cell{background:#f5f9ff!important}.at-root .expand-panel{background:#f5f9ff!important;border-color:#c9daf2!important}.at-root .exp-label{color:#999!important}.at-root .exp-val{color:#191919!important}
 </style>

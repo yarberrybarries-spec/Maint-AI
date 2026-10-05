@@ -3,33 +3,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
-    name: 'Home',
-    component: () => import('../views/homeviews/Home.vue')
+    redirect: '/login'
   },
   {
     path: '/login',
     name: 'Login',
     component: () => import('../views/homeviews/Login.vue')
-  },
-  {
-    path: '/knowledge',
-    name: 'Knowledge',
-    component: () => import('../views/Knowledge.vue')
-  },
-  {
-    path: '/operation',
-    name: 'Operation',
-    component: () => import('../views/Operation.vue')
-  },
-  {
-    path: '/cases',
-    name: 'Cases',
-    component: () => import('../views/Cases.vue')
-  },
-  {
-    path: '/profile',
-    name: 'Profile',
-    component: () => import('../views/Profile.vue')
   },
   {
     path: '/forgot-password',

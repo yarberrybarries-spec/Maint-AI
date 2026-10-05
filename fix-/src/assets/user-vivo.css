@@ -1,0 +1,446 @@
+/* Vivo-inspired admin redesign: airy white canvas, warm red accent, quiet typography. */
+.vivo-user-shell {
+  --vivo-red: #1f6ed4;
+  --vivo-red-deep: #1554ad;
+  --vivo-red-soft: #eaf2ff;
+  --vivo-ink: #202020;
+  --vivo-muted: #8e8e8e;
+  --vivo-line: #e9e9e6;
+  --vivo-paper: #ffffff;
+  --vivo-canvas: #f7f7f5;
+  min-height: 100vh;
+  background: var(--vivo-canvas) !important;
+  color: var(--vivo-ink) !important;
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.vivo-user-shell *, .vivo-user-shell *::before, .vivo-user-shell *::after { box-sizing: border-box; }
+.vivo-user-sheen { position: fixed; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(circle at 88% 5%, rgba(31,110,212,.07), transparent 26%), radial-gradient(circle at 5% 32%, rgba(230,230,224,.55), transparent 24%); }
+.vivo-user-header { position: sticky; top: 0; z-index: 100; height: 82px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--vivo-line); backdrop-filter: blur(18px); }
+.vivo-user-header-inner { max-width: 1440px; height: 100%; padding: 0 38px; margin: 0 auto; display: flex; align-items: center; gap: 30px; position: relative; z-index: 1; }
+.vivo-user-brand { display: inline-flex; align-items: center; flex: 0 0 auto; gap: 11px; border: 0; padding: 0; color: var(--vivo-ink); background: transparent; cursor: pointer; }
+.vivo-user-brand-mark { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: #1f6ed4; box-shadow: 0 8px 18px rgba(31,110,212,.2); }
+.vivo-user-brand-mark svg { width: 20px; height: 20px; display: block; }
+.vivo-user-brand-copy { display: flex; flex-direction: column; align-items: flex-start; line-height: 1; }
+.vivo-user-brand-copy strong { font-size: 20px; letter-spacing: -.06em; }
+.vivo-user-brand-copy small { margin-top: 6px; color: var(--vivo-red); font: 700 8px ui-monospace, monospace; letter-spacing: .14em; }
+.vivo-user-nav { display: flex; align-items: stretch; gap: 4px; height: 100%; flex: 1; }
+.vivo-user-nav-item { position: relative; min-width: 68px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 4px 13px 0; border: 0; color: #777; background: transparent; cursor: pointer; font-size: 13px; transition: color .2s ease; }
+.vivo-user-nav-item small { display: none; }
+.vivo-user-nav-item::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 5px 5px 0 0; background: transparent; transition: background .2s ease; }
+.vivo-user-nav-item:hover, .vivo-user-nav-item.active { color: var(--vivo-red); }
+.vivo-user-nav-item.active::after { background: var(--vivo-red); }
+.vivo-user-header-actions { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.vivo-user-search { width: 190px; height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--vivo-line); border-radius: 999px; background: #fafaf8; }
+.vivo-user-search:focus-within { border-color: #9fc1ea; box-shadow: 0 0 0 4px rgba(31,110,212,.08); }
+.vivo-user-search .el-icon { color: #a0a0a0; }
+.vivo-user-search input { min-width: 0; flex: 1; outline: none; border: 0; color: var(--vivo-ink); background: transparent; font-size: 12px; }
+.vivo-user-search input::placeholder { color: #aaa; }
+.vivo-user-search button { border: 0; padding: 0; color: var(--vivo-red); background: transparent; cursor: pointer; font-size: 10px; }
+.vivo-user-online { display: inline-flex; align-items: center; gap: 6px; color: #65a477; white-space: nowrap; font-size: 11px; }
+.vivo-user-online i, .vivo-user-context-meta i { width: 6px; height: 6px; display: inline-block; border-radius: 50%; background: #69af7b; box-shadow: 0 0 0 4px rgba(105,175,123,.12); }
+.vivo-user-time { padding-left: 12px; border-left: 1px solid var(--vivo-line); color: #999; font: 11px ui-monospace, monospace; }
+:is(.vivo-user-user, .vivo-user-account) { display: inline-flex; align-items: center; gap: 7px; padding: 0; border: 0; color: var(--vivo-ink); background: transparent; cursor: pointer; font-size: 12px; }
+:is(.vivo-user-user, .vivo-user-account) span { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--vivo-red); font-weight: 700; }
+:is(.vivo-user-user, .vivo-user-account) b { max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.vivo-user-logout, .vivo-user-mobile-menu { display: grid; place-items: center; border: 1px solid var(--vivo-line); color: #777; background: #fff; cursor: pointer; }
+.vivo-user-logout { width: 32px; height: 32px; border-radius: 50%; }
+.vivo-user-logout:hover { color: var(--vivo-red); border-color: #9fc1ea; }
+.vivo-user-mobile-menu { display: none; width: 34px; height: 34px; border-radius: 10px; }
+.vivo-user-context { position: relative; z-index: 1; background: #fff; }
+.vivo-user-context-inner { max-width: 1440px; min-height: 166px; margin: 0 auto; padding: 34px 38px 30px; display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.vivo-user-kicker, .vivo-eyebrow { color: #a5a5a2; font: 700 10px ui-monospace, monospace; letter-spacing: .16em; }
+.vivo-user-context h1 { margin: 10px 0 0; color: var(--vivo-ink); font-size: clamp(32px, 4vw, 52px); letter-spacing: -.08em; line-height: .95; }
+.vivo-user-context p { margin: 13px 0 0; color: #999; font-size: 13px; }
+.vivo-user-context-meta { display: flex; flex-direction: column; align-items: end; gap: 12px; color: #69a878; font-size: 11px; }
+.vivo-user-context-meta span { display: inline-flex; align-items: center; gap: 8px; }
+.vivo-user-context-meta strong { color: #c2c2be; font: 700 10px ui-monospace, monospace; letter-spacing: .12em; }
+.vivo-user-main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; padding: 30px 38px 90px; }
+.vivo-user-main a { color: inherit; }
+
+/* dashboard */
+.vivo-user-dashboard { max-width: 1400px; margin: 0 auto; }
+.vivo-dash-welcome { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 0 0 28px; }
+.vivo-dash-welcome h2 { margin: 12px 0 0; color: var(--vivo-ink); font-size: clamp(28px, 4vw, 50px); font-weight: 650; letter-spacing: -.08em; line-height: .98; }
+.vivo-dash-welcome h2 em { color: var(--vivo-red); font-style: normal; }
+.vivo-dash-welcome p { max-width: 620px; margin: 14px 0 0; color: #92928f; font-size: 13px; line-height: 1.7; }
+.vivo-dash-actions { display: flex; align-items: center; gap: 10px; }
+.vivo-light-action, .vivo-red-action { height: 38px; display: inline-flex; align-items: center; gap: 7px; padding: 0 15px; border-radius: 999px; text-decoration: none; font-size: 12px; transition: transform .2s ease, background .2s ease; }
+.vivo-light-action { border: 1px solid var(--vivo-line); color: #666; background: #fff; }
+.vivo-red-action { border: 1px solid var(--vivo-red); color: #fff; background: var(--vivo-red); box-shadow: 0 8px 20px rgba(31,110,212,.17); }
+.vivo-light-action:hover, .vivo-red-action:hover { transform: translateY(-2px); }
+.vivo-red-action:hover { background: var(--vivo-red-deep); }
+.vivo-stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.vivo-stat-card { min-height: 150px; position: relative; display: flex; flex-direction: column; align-items: flex-start; padding: 19px 20px; border: 1px solid var(--vivo-line); border-radius: 18px; color: var(--vivo-ink); background: #fff; text-align: left; cursor: pointer; overflow: hidden; transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.vivo-stat-card::after { content: ''; position: absolute; right: -26px; bottom: -45px; width: 130px; height: 130px; border-radius: 50%; background: var(--vivo-red-soft); }
+.vivo-stat-card:hover { transform: translateY(-3px); border-color: #9fc1ea; box-shadow: 0 12px 30px rgba(0,0,0,.06); }
+.vivo-stat-index { color: #c4c4c1; font: 700 10px ui-monospace, monospace; }
+.vivo-stat-label { margin-top: 17px; color: #858582; font-size: 12px; }
+.vivo-stat-card strong { margin-top: 2px; font-size: 38px; font-weight: 650; letter-spacing: -.08em; }
+.vivo-stat-card strong small { margin-left: 4px; color: var(--vivo-red); font-size: 13px; }
+.vivo-stat-bottom { position: relative; z-index: 1; width: 100%; display: flex; align-items: center; gap: 6px; margin-top: auto; color: #999; font-size: 10px; }
+.vivo-stat-bottom .el-icon:first-child { color: var(--vivo-red); }
+.vivo-stat-bottom .el-icon:last-child { margin-left: auto; color: #c5c5c1; }
+.vivo-command-card { min-height: 310px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(330px, .95fr); margin-bottom: 14px; overflow: hidden; border-radius: 22px; background: #fff; border: 1px solid var(--vivo-line); }
+.vivo-command-copy { padding: 30px 32px; }
+.vivo-command-copy h3 { margin: 10px 0 0; font-size: 25px; letter-spacing: -.06em; }
+.vivo-command-copy > p { max-width: 500px; margin: 10px 0 20px; color: #969693; font-size: 13px; line-height: 1.65; }
+.vivo-command-form { display: grid; grid-template-columns: 135px minmax(0, 1fr); gap: 10px; max-width: 590px; }
+.vivo-command-form label { display: flex; flex-direction: column; gap: 7px; color: #999; font-size: 11px; }
+.vivo-command-form .wide { min-width: 0; }
+.vivo-command-form input, .vivo-command-form textarea { width: 100%; border: 1px solid var(--vivo-line); outline: none; border-radius: 10px; color: var(--vivo-ink); background: #fafaf8; padding: 0 11px; font: 12px inherit; }
+.vivo-command-form input:focus, .vivo-command-form textarea:focus { border-color: #9fc1ea; box-shadow: 0 0 0 3px rgba(31,110,212,.08); }
+.vivo-command-form input { height: 40px; }
+.vivo-command-form textarea { height: 40px; resize: none; padding-top: 11px; }
+.vivo-command-form button { grid-column: 1 / -1; justify-self: start; height: 38px; margin-top: 4px; padding: 0 17px; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; color: #fff; background: var(--vivo-red); cursor: pointer; font-size: 12px; }
+.vivo-command-visual { position: relative; overflow: hidden; display: grid; place-items: center; min-height: 310px; background: linear-gradient(135deg, #fff9f8, #f7f7f4); }
+.vivo-command-visual::before { content: ''; position: absolute; inset: 20px; border: 1px solid rgba(31,110,212,.16); border-radius: 50%; transform: rotate(-16deg) scaleX(1.3); }
+.vivo-visual-orbit { position: absolute; border: 1px solid rgba(31,110,212,.23); border-radius: 50%; transform: rotate(54deg); }
+.orbit-one { width: 250px; height: 104px; }
+.orbit-two { width: 170px; height: 72px; transform: rotate(-34deg); }
+.vivo-visual-core { position: relative; z-index: 2; width: 118px; height: 118px; display: grid; place-items: center; border-radius: 32px; color: #fff; background: var(--vivo-red); box-shadow: 0 17px 40px rgba(31,110,212,.24); transform: rotate(-8deg); font: 700 23px/ .85 ui-monospace, monospace; letter-spacing: -.12em; }
+.vivo-visual-core b { color: #ffd6d2; font-weight: 700; }
+.vivo-visual-caption { position: absolute; right: 26px; bottom: 24px; color: #aaa; font: 9px/1.6 ui-monospace, monospace; letter-spacing: .13em; text-align: right; }
+.vivo-visual-caption b { color: var(--vivo-red); font-weight: 600; }
+.vivo-dash-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, .8fr); gap: 14px; margin-bottom: 14px; }
+.vivo-dash-columns.lower { grid-template-columns: minmax(0, 1fr) minmax(300px, .8fr); }
+.vivo-dash-panel { border: 1px solid var(--vivo-line); border-radius: 18px; padding: 22px; background: #fff; }
+.vivo-dash-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.vivo-dash-panel header h3 { margin: 8px 0 0; font-size: 21px; letter-spacing: -.06em; }
+.vivo-dash-panel header a { display: inline-flex; align-items: center; gap: 4px; color: var(--vivo-red); text-decoration: none; font-size: 11px; }
+.vivo-flow-list { display: grid; gap: 3px; }
+.vivo-flow-row { min-height: 48px; position: relative; display: grid; grid-template-columns: 16px 58px minmax(0, 1fr) auto 18px; align-items: center; gap: 9px; color: var(--vivo-ink); text-decoration: none; border-bottom: 1px solid #f1f1ee; }
+.vivo-flow-row:last-child { border-bottom: 0; }
+.vivo-flow-line { width: 7px; height: 7px; border-radius: 50%; background: var(--vivo-red); box-shadow: 0 0 0 5px var(--vivo-red-soft); }
+.vivo-flow-row:nth-child(2) .vivo-flow-line { background: #de9d34; box-shadow: 0 0 0 5px #fff6e5; }
+.vivo-flow-row:nth-child(3) .vivo-flow-line { background: #b7b7b2; box-shadow: 0 0 0 5px #f2f2ef; }
+.vivo-flow-number { color: var(--vivo-ink); font-size: 18px; font-weight: 650; }
+.vivo-flow-name { font-size: 12px; }
+.vivo-flow-sub { color: #aaa; font-size: 10px; }
+.vivo-flow-row > .el-icon { color: #c9c9c5; }
+.vivo-assistant-panel { background: #f5f9ff; border-color: #dbe7f5; }
+.vivo-ai-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 99px; color: #6aa478; background: #fff; font-size: 10px; }
+.vivo-ai-badge i { width: 5px; height: 5px; border-radius: 50%; background: #6aa478; }
+.vivo-assistant-panel > p { color: #8c8583; font-size: 12px; line-height: 1.7; }
+.vivo-chip-list { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.vivo-chip-list button { border: 1px solid #dbe7f5; border-radius: 99px; padding: 7px 9px; color: #1f6ed4; background: #fff; cursor: pointer; font-size: 10px; }
+.vivo-chip-list button:hover { border-color: var(--vivo-red); color: var(--vivo-red); }
+.vivo-assistant-input { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border: 1px solid #dbe7f5; border-radius: 999px; background: #fff; }
+.vivo-assistant-input input { min-width: 0; flex: 1; border: 0; outline: none; color: var(--vivo-ink); background: transparent; font-size: 11px; }
+.vivo-assistant-input button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; background: var(--vivo-red); cursor: pointer; }
+.vivo-log-list { display: grid; }
+.vivo-log-row { min-height: 52px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #f1f1ee; }
+.vivo-log-row:last-child { border-bottom: 0; }
+.vivo-log-row > i { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--vivo-red); }
+.vivo-log-row > div { min-width: 0; display: flex; gap: 8px; flex: 1; }
+.vivo-log-row b { font-size: 12px; font-weight: 600; }
+.vivo-log-row span, .vivo-log-row time { color: #999; font-size: 11px; }
+.vivo-log-row time { margin-left: auto; white-space: nowrap; }
+.vivo-empty { padding: 26px 0; color: #aaa; text-align: center; font-size: 12px; }
+.vivo-distribution { display: flex; align-items: center; gap: 24px; }
+.vivo-ring { width: 136px; height: 136px; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 18px solid #dbe7f5; border-right-color: var(--vivo-red); border-bottom-color: #a8c7ee; border-radius: 50%; }
+.vivo-ring span { font-size: 26px; font-weight: 650; letter-spacing: -.08em; }
+.vivo-ring small { color: #a0a09c; font-size: 10px; }
+.vivo-legend { flex: 1; display: grid; gap: 12px; }
+.vivo-legend div { display: grid; grid-template-columns: 8px 1fr auto; gap: 8px; align-items: center; color: #7f7f7c; font-size: 11px; }
+.vivo-legend i { width: 7px; height: 7px; border-radius: 50%; }
+.vivo-legend b { color: var(--vivo-ink); font-weight: 600; }
+
+/* common old business pages: new canvas, spacing and red interaction layer */
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) { max-width: 1400px !important; margin: 0 auto !important; color: var(--vivo-ink) !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(.page-header, .at-head, .center-header, .profile-header, .head-copy) { border: 0 !important; background: transparent !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(.card, .filter-card, .table-wrap, .users-table, .notification-item, .identity-console, .center-content, .panel, .section-card) { border: 1px solid var(--vivo-line) !important; border-radius: 18px !important; background: #fff !important; box-shadow: 0 10px 28px rgba(0,0,0,.035) !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(h1, h2, h3, .page-title, .at-title, .center-header h1, .head-copy h1) { color: var(--vivo-ink) !important; letter-spacing: -.06em !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(button.primary, .primary-btn, .create-btn, .submit-btn, .action-btn, .search-btn, .el-button--primary) { border-color: var(--vivo-red) !important; color: #fff !important; background: var(--vivo-red) !important; box-shadow: 0 7px 16px rgba(31,110,212,.14) !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(button.primary, .primary-btn, .create-btn, .submit-btn, .action-btn, .search-btn, .el-button--primary):hover { background: var(--vivo-red-deep) !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(input, textarea, select, .el-input__wrapper) { border-color: var(--vivo-line) !important; background: #fafaf8 !important; box-shadow: none !important; }
+.vivo-user-main :is(.at-root, .admin-center-page, .admin-profile-page, .admin-users, .notification-page) :is(input, textarea, select, .el-input__wrapper):focus-within { border-color: #9fc1ea !important; box-shadow: 0 0 0 3px rgba(31,110,212,.08) !important; }
+.vivo-user-main .el-tabs__item.is-active { color: var(--vivo-red) !important; }
+.vivo-user-main .el-tabs__active-bar { background: var(--vivo-red) !important; }
+.vivo-user-main .el-tag { border-radius: 99px !important; }
+.vivo-user-main .at-root { padding: 0 !important; }
+.vivo-user-main .admin-center-page { padding: 0 !important; }
+.vivo-user-main .oppo-center-hero { padding: 0 0 22px !important; }
+.vivo-user-main .center-content-head { padding: 22px 0 16px !important; }
+.vivo-user-main .admin-profile-page { padding: 0 !important; }
+.vivo-user-main .admin-users, .vivo-user-main .notification-page { padding: 24px !important; }
+
+@media (max-width: 1100px) {
+  .vivo-user-header-inner { padding: 0 22px; gap: 16px; }
+  .vivo-user-nav-item { padding-left: 8px; padding-right: 8px; }
+  .vivo-user-search { width: 150px; }
+  :is(.vivo-user-user, .vivo-user-account) b, .vivo-user-time { display: none; }
+  .vivo-user-context-inner, .vivo-user-main { padding-left: 22px; padding-right: 22px; }
+}
+@media (max-width: 820px) {
+  .vivo-user-header { height: 68px; }
+  .vivo-user-header-inner { padding: 0 16px; }
+  .vivo-user-mobile-menu { display: grid; }
+  .vivo-user-nav { position: absolute; left: 14px; right: 14px; top: 62px; height: auto; display: none; flex-direction: column; padding: 8px; border: 1px solid var(--vivo-line); border-radius: 16px; background: #fff; box-shadow: 0 16px 35px rgba(0,0,0,.1); }
+  .vivo-user-nav.open { display: flex; }
+  .vivo-user-nav-item { min-height: 42px; justify-content: flex-start; padding: 0 12px; border-radius: 10px; }
+  .vivo-user-nav-item.active { background: var(--vivo-red-soft); }
+  .vivo-user-nav-item::after { display: none; }
+  .vivo-user-nav-item small { display: inline; margin-left: auto; color: #b4b4b0; font-size: 10px; }
+  .vivo-user-search, .vivo-user-online, .vivo-user-logout { display: none; }
+  .vivo-user-context-inner { min-height: 138px; padding-top: 28px; padding-bottom: 24px; }
+  .vivo-user-context-meta { display: none; }
+  .vivo-dash-welcome { display: block; }
+  .vivo-dash-actions { margin-top: 20px; }
+  .vivo-stat-grid { grid-template-columns: 1fr; }
+  .vivo-command-card, .vivo-dash-columns, .vivo-dash-columns.lower { grid-template-columns: 1fr; }
+  .vivo-command-visual { min-height: 230px; }
+}
+@media (max-width: 520px) {
+  .vivo-user-brand-copy { display: none; }
+  .vivo-user-header-actions { margin-left: auto; }
+  .vivo-user-context-inner, .vivo-user-main { padding-left: 16px; padding-right: 16px; }
+  .vivo-dash-welcome h2 { font-size: 34px; }
+  .vivo-dash-actions { flex-wrap: wrap; }
+  .vivo-command-copy { padding: 24px 20px; }
+  .vivo-command-form { grid-template-columns: 1fr; }
+  .vivo-command-form button { grid-column: auto; }
+  .vivo-distribution { display: grid; justify-items: center; }
+  .vivo-legend { width: 100%; }
+}
+
+/* User pages share the exact same Vivo canvas and interaction language. */
+.vivo-user-main { min-height: 420px; }
+.vivo-user-main .neo-dashboard,
+.vivo-user-main .neo-search-page,
+.vivo-user-main .neo-ai-frame,
+.vivo-user-main .user-tasks-page,
+.vivo-user-main .user-profile-page,
+.vivo-user-main .case-upload,
+.vivo-user-main .search-result,
+.vivo-user-main .task-console,
+.vivo-user-main .kg-page,
+.vivo-user-main .quiz-wrap { max-width: 1400px !important; margin: 0 auto !important; padding: 0 0 70px !important; background: transparent !important; color: #202020 !important; }
+.vivo-user-main :is(.dash-intro, .search-intro, .ai-frame-head, .task-page-head, .cu-head, .profile-head) { max-width: none !important; }
+.vivo-user-main :is(.metric-card, .hero-panel, .dash-card, .quick-strip, .search-box, .results-panel, .hot-card, .manual-card, .task-summary, .task-table-wrap, .task-filter-card, .identity-console, .profile-card, .profile-panel, .cu-field, .book-card, .task-command, .resolution-summary) { border-color: #e9e9e6 !important; border-radius: 18px !important; background: #fff !important; box-shadow: 0 10px 28px rgba(0,0,0,.035) !important; }
+.vivo-user-main :is(.hero-panel, .hero-search, .search-box, .task-command) { background: linear-gradient(120deg,#f5f9ff,#fff 75%) !important; }
+.vivo-user-main :is(h1, h2, h3, .dash-intro h1, .search-intro h1, .ai-frame-head h1) { color: #202020 !important; letter-spacing: -.07em !important; }
+.vivo-user-main :is(.dash-intro h1 em, .section-kicker, .dash-kicker, .ai-frame-kicker, .search-note span, .hero-links button:hover) { color: #1f6ed4 !important; }
+.vivo-user-main :is(.dash-button, .search-input-row button, .search-submit, .create-task-btn, .primary-btn, .submit-btn, .save-btn, .action-btn, .el-button--primary) { border-color: #1f6ed4 !important; color: #fff !important; background: #1f6ed4 !important; box-shadow: 0 8px 18px rgba(31,110,212,.14) !important; }
+.vivo-user-main :is(.dash-button, .search-input-row button, .search-submit, .create-task-btn, .primary-btn, .submit-btn, .save-btn, .action-btn, .el-button--primary):hover { background: #1554ad !important; }
+.vivo-user-main :is(input, textarea, select, .el-input__wrapper) { border-color: #e9e9e6 !important; background: #fafaf8 !important; box-shadow: none !important; }
+.vivo-user-main :is(input, textarea, select, .el-input__wrapper):focus-within { border-color: #9fc1ea !important; box-shadow: 0 0 0 3px rgba(31,110,212,.08) !important; }
+.vivo-user-main :is(.task-row, .flow-item, .quick-grid button, .manual-card, .hot-tag, .assistant-chips button) { border-color: #efefec !important; }
+.vivo-user-main :is(.task-row, .flow-item, .quick-grid button, .manual-card):hover { border-color: #9fc1ea !important; box-shadow: 0 12px 28px rgba(0,0,0,.06) !important; }
+.vivo-user-main :is(.flow-dot, .online-mark i, .ai-frame-status i) { background: #1f6ed4 !important; }
+.vivo-user-main .neo-dashboard .hero-visual { background: linear-gradient(135deg,#f5f9ff,#f8f8f5) !important; }
+.vivo-user-main .neo-dashboard .visual-core { background: #1f6ed4 !important; box-shadow: 0 17px 40px rgba(31,110,212,.24) !important; }
+.vivo-user-main .neo-dashboard .visual-orbit { border-color: rgba(31,110,212,.22) !important; }
+.vivo-user-main .neo-dashboard .metric-card strong { color: #202020 !important; }
+.vivo-user-main .neo-dashboard .metric-card small .el-icon { color: #1f6ed4 !important; }
+.vivo-user-main .neo-search-page .search-input-row button { border-radius: 999px !important; }
+.vivo-user-main .neo-search-page .search-input-row button {
+  position: relative !important;
+  min-width: 84px !important;
+  justify-content: center !important;
+  padding: 11px 16px !important;
+  text-align: center !important;
+}
+.vivo-user-main .neo-search-page .search-input-row button .el-icon {
+  position: absolute;
+  right: 11px;
+  margin: 0 !important;
+}
+.vivo-user-main .neo-ai-frame .ai-frame-body { border-color: #e9e9e6 !important; box-shadow: 0 12px 34px rgba(0,0,0,.05) !important; }
+.vivo-user-main .el-tabs__item.is-active { color: #1f6ed4 !important; }
+.vivo-user-main .el-tabs__active-bar { background: #1f6ed4 !important; }
+
+@media (max-width: 1100px) {
+  .vivo-user-header-inner, .vivo-user-context-inner, .vivo-user-main { padding-left: 22px; padding-right: 22px; }
+}
+@media (max-width: 820px) {
+  .vivo-user-header { height: 68px; }
+  .vivo-user-header-inner { padding: 0 16px; }
+  .vivo-user-mobile-menu { display: grid; }
+  .vivo-user-nav { position: absolute; left: 14px; right: 14px; top: 62px; height: auto; display: none; flex-direction: column; padding: 8px; border: 1px solid #e9e9e6; border-radius: 16px; background: #fff; box-shadow: 0 16px 35px rgba(0,0,0,.1); }
+  .vivo-user-nav.open { display: flex; }
+  .vivo-user-nav-item { min-height: 42px; justify-content: flex-start; padding: 0 12px; border-radius: 10px; }
+  .vivo-user-nav-item.active { background: #eaf2ff; }
+  .vivo-user-nav-item::after { display: none; }
+  .vivo-user-nav-item small { display: inline; margin-left: auto; color: #b4b4b0; font-size: 10px; }
+  .vivo-user-search, .vivo-user-online, .vivo-user-time, .vivo-user-logout { display: none; }
+  .vivo-user-context-inner { min-height: 138px; padding-top: 28px; padding-bottom: 24px; }
+  .vivo-user-context-meta { display: none; }
+}
+@media (max-width: 520px) {
+  .vivo-user-brand-copy, .vivo-user-account b { display: none; }
+  .vivo-user-header-actions { margin-left: auto; }
+  .vivo-user-context-inner, .vivo-user-main { padding-left: 16px; padding-right: 16px; }
+}
+
+/* 全局页面留白：进一步收紧底部空白，并让内容横向展开。 */
+.vivo-user-header-inner { max-width: 1760px; padding-left: 18px; padding-right: 18px; }
+.vivo-user-main { max-width: 1760px; padding: 30px 18px 32px; }
+.vivo-user-main :is(.neo-dashboard, .neo-search-page, .neo-ai-frame, .user-tasks-page, .user-profile-page, .case-upload, .search-result, .task-console, .kg-page, .quiz-wrap) {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-bottom: 20px !important;
+}
+
+@media (max-width: 1100px) {
+  .vivo-user-header-inner { padding-left: 14px; padding-right: 14px; }
+  .vivo-user-main { padding: 26px 14px 28px; }
+  .vivo-user-main :is(.neo-dashboard, .neo-search-page, .neo-ai-frame, .user-tasks-page, .user-profile-page, .case-upload, .search-result, .task-console, .kg-page, .quiz-wrap) { padding-bottom: 18px !important; }
+}
+@media (max-width: 820px) {
+  .vivo-user-header-inner { padding-left: 12px; padding-right: 12px; }
+  .vivo-user-main { padding: 22px 12px 24px; }
+  .vivo-user-main :is(.neo-dashboard, .neo-search-page, .neo-ai-frame, .user-tasks-page, .user-profile-page, .case-upload, .search-result, .task-console, .kg-page, .quiz-wrap) { padding-bottom: 16px !important; }
+}
+@media (max-width: 520px) {
+  .vivo-user-header-inner { padding-left: 10px; padding-right: 10px; }
+  .vivo-user-main { padding: 18px 10px 18px; }
+  .vivo-user-main :is(.neo-dashboard, .neo-search-page, .neo-ai-frame, .user-tasks-page, .user-profile-page, .case-upload, .search-result, .task-console, .kg-page, .quiz-wrap) { padding-bottom: 12px !important; }
+}
+
+/* 页面标题与主体组件共用同一内容轨道，避免视口放大时标题漂移。 */
+.vivo-user-main .dash-intro,
+.vivo-user-main .search-intro,
+.vivo-user-main .ai-frame-head {
+  width: 100%!important;
+  max-width: 1320px!important;
+  margin-right: auto!important;
+  margin-left: auto!important;
+}
+.vivo-user-main .cu-head {
+  width: 100%!important;
+  max-width: 1050px!important;
+  margin-right: auto!important;
+  margin-left: auto!important;
+}
+.vivo-user-main .profile-head {
+  width: 100%!important;
+  max-width: 1180px!important;
+  margin-right: auto!important;
+  margin-left: auto!important;
+}
+.vivo-user-main :is(.dash-intro h1, .search-intro h1) { font-size: 52px!important; }
+.vivo-user-main .ai-frame-head h1 { font-size: 44px!important; }
+
+@media (max-width: 680px) {
+  .vivo-user-main :is(.dash-intro h1, .search-intro h1) { font-size: 36px!important; }
+  .vivo-user-main .ai-frame-head h1 { font-size: 34px!important; }
+}
+
+/* 蓝色版本：与红色版本共用布局，仅替换交互强调色。 */
+:root[data-theme="cool"] .vivo-admin-shell,
+:root[data-theme="cool"] .vivo-user-shell {
+  --vivo-red: #1f6ed4;
+  --vivo-red-deep: #1554ad;
+  --vivo-red-soft: #eaf2ff;
+  --vivo-line: #dbe7f5;
+  --vivo-canvas: #f3f7fd;
+}
+:root[data-theme="cool"] .vivo-admin-shell .vivo-admin-brand-mark,
+:root[data-theme="cool"] .vivo-user-shell .vivo-user-brand-mark,
+:root[data-theme="cool"] .vivo-admin-shell .vivo-admin-user span,
+:root[data-theme="cool"] .vivo-user-shell .vivo-user-account span {
+  box-shadow: 0 8px 18px rgba(31,110,212,.2);
+}
+:root[data-theme="cool"] .vivo-user-main :is(.dash-intro h1 em, .section-kicker, .dash-kicker, .ai-frame-kicker, .search-note span, .hero-links button:hover) {
+  color: #1f6ed4 !important;
+}
+:root[data-theme="cool"] .vivo-user-main :is(.dash-button, .search-input-row button, .search-submit, .create-task-btn, .primary-btn, .submit-btn, .save-btn, .action-btn, .el-button--primary) {
+  border-color: #1f6ed4 !important;
+  background: #1f6ed4 !important;
+}
+:root[data-theme="cool"] .vivo-user-main :is(.dash-button, .search-input-row button, .search-submit, .create-task-btn, .primary-btn, .submit-btn, .save-btn, .action-btn, .el-button--primary):hover {
+  background: #1554ad !important;
+}
+:root[data-theme="cool"] .vivo-user-main :is(.flow-dot, .online-mark i, .ai-frame-status i),
+:root[data-theme="cool"] .vivo-user-main .neo-dashboard .visual-core {
+  background: #1f6ed4 !important;
+}
+:root[data-theme="cool"] .vivo-user-main .el-tabs__item.is-active { color: #1f6ed4 !important; }
+:root[data-theme="cool"] .vivo-user-main .el-tabs__active-bar { background: #1f6ed4 !important; }
+
+/* Unified input surface: no gray fill or inset shadow; focus is shown on the whole control. */
+.vivo-user-main :is(input, textarea, select, .el-input__wrapper, .el-textarea__inner, .el-select__wrapper) {
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.vivo-user-main :is(.vivo-user-search, .search-input-row, .hero-search, .assistant-input, .vivo-assistant-input) input {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.vivo-user-main :is(.vivo-user-search, .search-input-row, .hero-search, .assistant-input, .vivo-assistant-input, .task-search, .search-bar-card, .history-search, .code-input-wrapper) {
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.vivo-user-main :is(.vivo-user-search, .search-input-row, .hero-search, .assistant-input, .vivo-assistant-input, .task-search, .search-bar-card, .history-search, .code-input-wrapper):focus-within {
+  border-color: #1f6ed4 !important;
+  box-shadow: 0 0 0 3px rgba(31,110,212,.14) !important;
+}
+.vivo-user-main :is(.search-input-row button, .search-submit, .search-btn, .el-button--primary) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+
+/* AI 工作台固定在视口内：消息区滚动，底部输入栏不随输出内容向下撑开。 */
+.vivo-user-main .neo-ai-frame {
+  display: flex !important;
+  width: 100% !important;
+  max-width: 1560px !important;
+  box-sizing: border-box !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  height: calc(100vh) !important;
+  min-height: 0 !important;
+  max-height: calc(100vh) !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+  margin-bottom: -144px !important;
+}
+.vivo-user-main .neo-ai-frame .ai-frame-head {
+  flex: 0 0 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+.vivo-user-main .neo-ai-frame .ai-frame-body {
+  display: flex !important;
+  min-height: 0 !important;
+  height: auto !important;
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  overflow: hidden !important;
+}
+@media (max-width: 820px) {
+  .vivo-user-main .neo-ai-frame {
+    max-width: 100% !important;
+    height: calc(100vh - 12px) !important;
+    max-height: calc(100vh - 12px) !important;
+    margin-bottom: -102px !important;
+  }
+}
+
+/* 检修任务页沿用总览页的标题轨道，并移除页面底部的灰色画布。 */
+.vivo-user-shell:has(.neo-tasks) {
+  background: #fff !important;
+}
+.vivo-user-shell:has(.neo-tasks) .vivo-user-sheen {
+  display: none !important;
+}
+.vivo-user-main:has(.neo-tasks) {
+  padding-bottom: 0 !important;
+}
+
+/* 工作队列与上方统计区共用同一内容宽度，避免被页面通用规则拉满后偏移。 */
+.vivo-user-main .neo-tasks .task-console {
+  width: 100% !important;
+  max-width: 1400px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}

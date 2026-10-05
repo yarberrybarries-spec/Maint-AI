@@ -954,9 +954,9 @@ const resultItems = computed(() => [
 }
 
 .timeline-step.is-running .step-icon {
-  color: #b96700;
-  border-color: #f2c98e;
-  background: #fff6e8;
+  color: #1f6ed4;
+  border-color: #9fc1ea;
+  background: #eaf2ff;
 }
 
 .timeline-step.is-running .step-icon .el-icon {
@@ -965,9 +965,9 @@ const resultItems = computed(() => [
 
 .timeline-step.is-warn .step-icon,
 .timeline-step.is-error .step-icon {
-  color: #c54e36;
-  border-color: #f0c7bf;
-  background: #fff3f1;
+  color: #1f6ed4;
+  border-color: #b9d2ef;
+  background: #f1f6fc;
 }
 
 .step-copy {

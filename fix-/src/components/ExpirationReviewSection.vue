@@ -16,7 +16,7 @@ const TRIGGER_MAP = {
 /* ========== 判定结果标签 ========== */
 const VERDICT_MAP = {
   REPLACE:     { label: '替代',  color: '#c5402c', bg: '#fbeae4' },
-  SUPPLEMENT:  { label: '补充',  color: '#a8605f', bg: '#f5ece8' },
+  SUPPLEMENT:  { label: '补充',  color: '#2f6fbd', bg: '#eef5ff' },
   UNRELATED:   { label: '无关',  color: 'var(--plaza-text-muted)', bg: 'var(--plaza-panel-bg)' },
 }
 
