@@ -1,0 +1,230 @@
+name: maint-ai
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fix}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./weixiu/src/main/resources/sql/fix.sql:/docker-entrypoint-initdb.d/001-fix.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis/redis-stack:7.2.0-v18
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-change_me_neo4j}
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-maintai}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-change_me_rabbitmq}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+      MINIO_DOCUMENT_BUCKET: ${MINIO_DOCUMENT_BUCKET:-weixiu-private-wendang}
+      MINIO_PUBLIC_IMAGE_BUCKET: ${MINIO_PUBLIC_IMAGE_BUCKET:-weixiu-public-tupian}
+    volumes:
+      - ./docker/minio/init-buckets.sh:/init-buckets.sh:ro
+    entrypoint: ["/bin/sh", "/init-buckets.sh"]
+    restart: "no"
+
+  fixagent:
+    build:
+      context: ./FixAgent
+      dockerfile: Dockerfile
+    environment:
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-qwen-plus}
+      LLM_API_BASE: ${LLM_API_BASE:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
+      LLM_TOP_P: ${LLM_TOP_P:-0.9}
+      RAG_VARIANT: ${RAG_VARIANT:-production}
+      CLARIFICATION_MODE: ${CLARIFICATION_MODE:-enforce}
+      IMAGE_SUMMARY_LLM_ENABLED: ${IMAGE_SUMMARY_LLM_ENABLED:-true}
+      API_TOKEN: ${API_TOKEN:-replace_with_random_fixagent_api_token}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-replace_with_different_random_internal_token}
+      JAVA_SERVICE_URL: http://weixiu:8080
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change_me_neo4j}
+      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-maintai}:${RABBITMQ_PASSWORD:-change_me_rabbitmq}@rabbitmq:5672/
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fix}
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me}
+      FILE_STORAGE_BACKEND: minio
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+      MINIO_DOCUMENT_BUCKET: ${MINIO_DOCUMENT_BUCKET:-weixiu-private-wendang}
+      MINIO_PUBLIC_IMAGE_BUCKET: ${MINIO_PUBLIC_IMAGE_BUCKET:-weixiu-public-tupian}
+      MINIO_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-9000}/${MINIO_PUBLIC_IMAGE_BUCKET:-weixiu-public-tupian}
+      MINIO_SECURE: "false"
+      GRAPH_JAVA_REQUEST_BUDGET_SECONDS: ${GRAPH_JAVA_REQUEST_BUDGET_SECONDS:-10}
+      GRAPH_CLIENT_TIMEOUT_SECONDS: ${GRAPH_CLIENT_TIMEOUT_SECONDS:-20}
+      GRAPH_QUALITY_HIGH_THRESHOLD: ${GRAPH_QUALITY_HIGH_THRESHOLD:-0.85}
+      GRAPH_QUALITY_MEDIUM_THRESHOLD: ${GRAPH_QUALITY_MEDIUM_THRESHOLD:-0.70}
+    ports:
+      - "${FIXAGENT_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  weixiu:
+    build:
+      context: ./weixiu
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-fix}
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-change_me_neo4j}
+      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-maintai}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-change_me_rabbitmq}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      PYTHON_SERVICE_URL: http://fixagent:8000
+      API_TOKEN: ${API_TOKEN:-replace_with_random_fixagent_api_token}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-replace_with_different_random_internal_token}
+      DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_PUBLIC_BASE_URL: http://localhost:${MINIO_PORT:-9000}/${MINIO_PUBLIC_IMAGE_BUCKET:-weixiu-public-tupian}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change_me_minio}
+      MINIO_DOCUMENT_BUCKET: ${MINIO_DOCUMENT_BUCKET:-weixiu-private-wendang}
+      MINIO_PUBLIC_IMAGE_BUCKET: ${MINIO_PUBLIC_IMAGE_BUCKET:-weixiu-public-tupian}
+      MINIO_SECURE: "false"
+      CORS_ALLOWED_ORIGINS: http://localhost:${FRONTEND_PORT:-80},http://127.0.0.1:${FRONTEND_PORT:-80}
+    ports:
+      - "${JAVA_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      fixagent:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./fix-
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      weixiu:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  neo4j_data:
+  neo4j_logs:
+  rabbitmq_data:
+  minio_data:
